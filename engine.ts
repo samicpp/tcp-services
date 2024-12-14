@@ -148,6 +148,7 @@ class Engine {
     };
     #headersSent = false;
     #headersPromise: Promise<void>;
+    async #writeTcp(data){await this.#tcp.write(data).catch(e=>e);};
     async #sendHeaders(length:number): Promise<void> {
       if (!this.#headersSent) {
         let resolve;
@@ -161,7 +162,7 @@ class Engine {
           let v = this.#headers[k];
           headers.push(`${k}: ${v}`);
         }
-        await this.#tcp.write(
+        await this.#writeTcp(
           this.#te.encode(
             `HTTP/1.1 ${this.status} ${this.statusMessage}\r\n${headers.join("\r\n")}\r\n\r\n`,
           ),
@@ -185,9 +186,9 @@ class Engine {
       //return this.#sendHeaders();
     }
     async #writeChunk(buf:ArrayBuffer): Promise<void>{
-      await this.#tcp.write(this.#te.encode(buf.byteLength.toString(16)+"\r\n"));
-      await this.#tcp.write(buf);
-      await this.#tcp.write(this.#te.encode("\r\n"));
+      await this.#writeTcp(this.#te.encode(buf.byteLength.toString(16)+"\r\n"));
+      await this.#writeTcp(buf);
+      await this.#writeTcp(this.#te.encode("\r\n"));
     }
     async writeText(text: string): Promise<void> {
       if(this.#isWebsocket)return;
@@ -215,7 +216,7 @@ class Engine {
       if (typeof data == "string") await this.writeText(data);
       if (typeof data == "object") await this.writeBuffer(data);
       await this.#tcp.write(this.#te.encode("0\r\n\r\n"));
-      this.#tcp.close();
+      this.#tcp.close().catch(e=>e);
     }
     deny(){if(!this.#isWebsocket)this.#tcp.close()}
 
@@ -313,7 +314,7 @@ class Engine {
             "\r\n",
           ].join("\r\n");
 
-          await this.#tcp.write(new TextEncoder().encode(res));
+          await this.#tcp.write(new TextEncoder().encode(res)).catch(e=>e);
 
           this.#listener();
 
@@ -444,7 +445,7 @@ class Engine {
       frame.set(header);
       frame.set(payload, header.length);
       
-      await this.#tcp.write(frame);
+      return await this.#tcp.write(frame).catch(e=>e);
     }    
     #uint(data:any):Uint8Array{
       let ret:Uint8Array;
