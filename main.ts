@@ -33,24 +33,31 @@ const tc={
     d:TextDecoder.prototype.decode.bind(new TextDecoder),
 };
 
-let allPerms=0;[
-    deno.permissions.querySync({ name: "net", host: "80" }),
-    deno.permissions.querySync({ name: "net", host: "443" }),
-    deno.permissions.querySync({ name: "read" }),
-].forEach(e=>allPerms+=e.state=="granted");
-
-if(allPerms!=3){
-    console.error("need all permissions");
-    deno.exit(1);
-}
-
-const logfstream = await deno.open("./logcat.out", {
-    create: true,
-    append: true,
-});
-const logfile = logfstream.writable.getWriter();
+const logfile=new class Logcat{
+    stream; writer; ready;
+    constructor(){
+        this.ready=this.#init();
+    }
+    async#init(){
+        let err;
+        const logfstream = await deno.open("./logcat.log", {
+            create: true,
+            append: true,
+        }).catch(e=>err=e);
+        if(err){
+            this.write=
+            this.log=(...a)=>new Promise(r=>r(a));
+            return false
+        }
+        this.stream=logfstream;
+        const logfile = logfstream.writable.getWriter();
+        this.writer=logfile;
+        await logfile.ready;
+    }
+    async write(text){ return await this.writer.write(tc.e(text)).catch(e=>e); };
+    log(reason,msg){return this.write(`[${reason}] ${msg}\0\r\n`)};
+};
 await logfile.ready;
-
 let keys=Object.keys(Object.getOwnPropertyDescriptors(console));
 console.allow=true;
 wraploop:for(let p of keys){
@@ -65,7 +72,8 @@ wraploop:for(let p of keys){
                 if(typeof args[i]=="string"&&!i)s.push(String(args[i]));
                 else s.push(String(deno.inspect(args[i])));
             };
-            await logfile.write(tc.e(`[${p}] ${s.join(" ")}\r\n`));
+            logfile.log(p,s.join(" "));
+            //await logfile.write(tc.e(`[${p}] ${s.join(" ")}\r\n`));
         } catch (err) {
             console._error("logfile write failed because",err);
         }
@@ -78,22 +86,41 @@ wraploop:for(let p of keys){
     };
 };
 
-let tlsopt: TlsOptions={
-    key: deno.readTextFileSync("D:\\privkey.pem"),
-    cert: deno.readTextFileSync("D:\\fullchain.pem"),
-    ca: deno.readTextFileSync("D:\\chain.pem"),
-};
+
 //console.log(tlsopt);
 
 // ---------start-----------
-await logfile.write("\r\nstart of main.ts").catch(e=>console.error(e));
+await logfile.write('\r\n');
+await logfile.log("system",`start of ${import.meta.url}`);
+//console.log("\r\nstart");
 
-console.log("options",args);
+//console.log("options",args);
+
+if(args.opt.help)console.log()
+
 let ports=args.opt["http-port"]||[80];
 let sports=args.opt["https-port"]||[443];
 let silent=args.opt.silent||args.sopt.includes("s");
 
 console.allow=!silent;
+
+
+let allPerms=0;[
+    deno.permissions.querySync({ name: "net" }),
+    deno.permissions.querySync({ name: "read" }),
+].forEach(e=>allPerms+=e.state=="granted");
+
+if(allPerms!=2){
+    console.error(`need net and file read permissions`);
+    deno.exit(1);
+}
+
+
+let tlsopt: TlsOptions={
+    key: deno.readTextFileSync("D:\\privkey.pem"),
+    cert: deno.readTextFileSync("D:\\fullchain.pem"),
+    ca: deno.readTextFileSync("D:\\chain.pem"),
+};
 
 const tcp: Engine=new Engine();
 for(let port of ports)tcp.start(parseInt(port));

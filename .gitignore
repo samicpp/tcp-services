@@ -1,4 +1,7 @@
 # personal
 http/80/*
 
+# dynamic files
 logcat.out
+logcat.log
+last-pid.txt
