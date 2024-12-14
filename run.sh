@@ -1,1 +1,1 @@
-sudo /home/codespace/.deno/bin/deno run $@ main.ts
+sudo deno run --allow-read --allow-write --allow-net ./main.ts --http=80 --https=443
