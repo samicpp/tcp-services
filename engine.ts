@@ -135,7 +135,11 @@ class Engine {
         c.httpVersion = hd.split(" ")[2];
         c.data = cd;
 
-        if (c.method && c.path && c.httpVersion) c.isValid = true;
+        if (c.method && c.path && c.httpVersion) {
+          if(c.path.startsWith("/")&&c.httpVersion.startsWith("HTTP/")&&str.endsWith("\r\n")){
+            c.isValid = true;
+          };
+        };
       } catch (err) {
         c.err = err;
       }

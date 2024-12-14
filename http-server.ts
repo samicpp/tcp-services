@@ -10,12 +10,13 @@ const dyn={};
 
 export async function listener({socket,client}: HTTPSocket){
     let proxied=false;
-    if(!client.isValid){
+    let isValid=client.isValid;
+    /*if(!client.isValid){
       socket.status=400;
       socket.statusMessage="Bad Request";
       socket.close("Cannot read client request");
       return; //socket.deny();
-    }
+    }*/
     if(client.address.hostname=="127.0.0.1"&&client.headers["x-real-ip"]){
         proxied=true;
     }
@@ -24,7 +25,9 @@ export async function listener({socket,client}: HTTPSocket){
     //await socket.writeText(client.method+" request at "+client.path);
     //socket.close("\r\n");
 
-    const url=new class SpecialURL extends URL{
+    console.log("socket client isValid",socket.client.isValid);
+    let url;
+    class SpecialURL extends URL{
       defdir="http";
       tardir="0";
       get getStart(){return `./${this.defdir}/${this.tardir}`};
@@ -41,7 +44,9 @@ export async function listener({socket,client}: HTTPSocket){
           t.tardir=tar||dtar
         }();
       }
-    }(`${proxied?client.headers["x-scheme"]:"http"}://${proxied?client.headers["x-forwarded-host"]:client.headers.host}${client.path}`);
+    };
+    try{url=new SpecialURL(`${proxied?client.headers["x-scheme"]:"http"}://${proxied?client.headers["x-forwarded-host"]:client.headers.host}${client.path}`);}catch(err){console.error(err)};
+    url=new SpecialURL(`about:blank#invalid`);
     //console.log(url);
     
     async function exists(get){
@@ -70,7 +75,7 @@ export async function listener({socket,client}: HTTPSocket){
       //socket.close();
     };
     async function e409(get:string){
-      let eget=url.getStart+"/errors/400.dyn.html";
+      let eget=url.getStart+"/errors/409.dyn.html";
       let stat=await exists(eget);
       if(!stat){
         socket.status=409;
@@ -78,6 +83,18 @@ export async function listener({socket,client}: HTTPSocket){
         await socket.close("conflict");
       } else {
         file(eget,{get});
+      }
+      //socket.close();
+    };
+    async function e400(){
+      let eget=url.getStart+"/errors/400.dyn.html";
+      let stat=await exists(eget);
+      if(!stat){
+        socket.status=409;
+        socket.statusMessage="Conflict";
+        await socket.close("conflict");
+      } else {
+        file(eget,{});
       }
       //socket.close();
     };
@@ -196,12 +213,14 @@ export async function listener({socket,client}: HTTPSocket){
     
 
     await url.ready;
-    let get=`./${url.defdir}/${url.tardir}/${url.pathname.replaceAll(/\.+/g, ".").replaceAll(/\.\//g, "/").replace(/\/$/, "")}`;
-    get=get.replaceAll(/\/+/g,"/").replace(/\/+$/,"");
-    console.log("get",get);
-    let getDirs=get.split("/");
-    
-
-
-    await handler(get);
+    if(isValid){
+      let get=`./${url.defdir}/${url.tardir}/${url.pathname.replaceAll(/\.+/g, ".").replaceAll(/\.\//g, "/").replace(/\/$/, "")}`;
+      get=get.replaceAll(/\/+/g,"/").replace(/\/+$/,"");
+      console.log("get",get);
+      let getDirs=get.split("/");
+      
+      await handler(get);
+    } else {
+      e400();
+    }
 }
