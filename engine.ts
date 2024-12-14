@@ -215,8 +215,8 @@ class Engine {
       //await this.#sendHeaders(0);
       if (typeof data == "string") await this.writeText(data);
       if (typeof data == "object") await this.writeBuffer(data);
-      await this.#tcp.write(this.#te.encode("0\r\n\r\n"));
-      this.#tcp.close().catch(e=>e);
+      await this.#writeTcp(this.#te.encode("0\r\n\r\n"));
+      this.#tcp.close();
     }
     deny(){if(!this.#isWebsocket)this.#tcp.close()}
 
