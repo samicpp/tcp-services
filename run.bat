@@ -1,0 +1,1 @@
+/home/codespace/.deno/bin/deno run --allow-all main.ts
