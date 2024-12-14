@@ -66,7 +66,7 @@ class Engine {
   }
   get readSize():number{return this.#readSize};
   
-  #Socket = class HTTPSocket {
+  #Socket = class HttpSocket {
     #engine; #tcp;
     #td; #te; #data;
 
@@ -80,6 +80,8 @@ class Engine {
     get tcpData() {
       if(!this.#isWebsocket)return this.#data;
     }
+
+    get engine() { return this.engine; }
     get socket() { return this; }
     constructor(engine,td, te, tcp, data) {
       this.#td = td;
@@ -501,7 +503,7 @@ class Engine {
     };
   };
 
-  async #listener(conn:Deno.TcpConn): Promise<void> {
+  async #listener(conn:Deno.Conn): Promise<void> {
     //conn.accept();
     const encoder = this.#te;
     const decoder = this.#td;

@@ -44,13 +44,13 @@ interface Engine {
      * @param event The name of the event to listen for.
      * @param listener The callback function to invoke with event data.
      */
-    on(event: 'connection', listener: (data: HTTPSocket | any) => void): void;
+    on(event: 'connection', listener: (data: HttpSocket | any) => void): void;
 
     /**
      * Internal HTTPSocket class reference.
      * @internal This property should not be accessed directly.
      */
-    readonly Socket: HTTPSocket;
+    readonly Socket: HttpSocket;
 
     /**
      * Internal WebSocket class reference.
@@ -74,7 +74,7 @@ interface TlsOptions{
 /**
  * HTTPSocket: Represents a single client connection, providing HTTP request and response handling.
  */
-interface HTTPSocket {
+interface HttpSocket {
     /**
      * Internal TCP connection for the client.
      * @internal This property should not be accessed directly.
