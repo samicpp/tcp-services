@@ -3,6 +3,8 @@ import * as http from './http-server.ts';
 import docs from "./docs.d.ts";
 const deno=Deno; // mitigate error messages in vscode
 
+let logcatPath='D:\\tcp\\logcat.log';
+
 let args:{
     opt:Record<string,string[]>;
     sopt:string;
@@ -40,7 +42,7 @@ const logfile=new class Logcat{
     }
     async#init(){
         let err;
-        const logfstream = await deno.open("./logcat.log", {
+        const logfstream = await deno.open(logcatPath||"./logcat.log", {
             create: true,
             append: true,
         }).catch(e=>err=e);
@@ -98,8 +100,8 @@ await logfile.log("system",`start of ${import.meta.url}`);
 
 if(args.opt.help)console.log()
 
-let ports=args.opt["http-port"]||[80];
-let sports=args.opt["https-port"]||[443];
+let ports=args.opt.http||[80];
+let sports=args.opt.https||[443];
 let silent=args.opt.silent||args.sopt.includes("s");
 
 console.allow=!silent;
@@ -108,9 +110,10 @@ console.allow=!silent;
 let allPerms=0;[
     deno.permissions.querySync({ name: "net" }),
     deno.permissions.querySync({ name: "read" }),
+    deno.permissions.querySync({ name: "write" }),
 ].forEach(e=>allPerms+=e.state=="granted");
 
-if(allPerms!=2){
+if(allPerms!=3){
     console.error(`need net and file read permissions`);
     deno.exit(1);
 }
@@ -124,7 +127,8 @@ let tlsopt: TlsOptions={
 
 const tcp: Engine=new Engine();
 for(let port of ports)tcp.start(parseInt(port));
-for(let sport of sports)tcp.start(parseInt(sport), tlsopt);
+tcp.tls=tlsopt;
+for(let sport of sports)tcp.start(parseInt(sport));
 tcp.on("connect",http.listener);
 tcp.on("null data",e=>console.log("no data"));
 

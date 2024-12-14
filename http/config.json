@@ -1,4 +1,6 @@
 {
     "default":"0",
-    "cppdev.dev":"80"
+    "cppdev.dev":"0",
+    "www.cppdev.dev":"0",
+    "t.cppdev.dev":"70"
 }

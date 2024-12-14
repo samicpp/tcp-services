@@ -43,11 +43,12 @@ class Engine {
   async start(port?: number, tls?: TlsOptions): Promise<void> {
     if (port) this.port = port;
     if (tls) this.tls=tls;
-    const server = tls?this.tlsServer:this.server;
+    const server = this.tls?this.tlsServer:this.server;
+    const type = this.tls?"tcp::tls":"tcp";
     //console.log('server created on',this.port)
     for await (const conn of server) {
       //conn.readable.pipeTo(conn.writable);
-      this.#listener(conn);
+      this.#listener(server, conn, type);
     }
   }
 
@@ -69,6 +70,7 @@ class Engine {
   #Socket = class HttpSocket {
     #engine; #tcp;
     #td; #te; #data;
+    #server; #type;
 
     #isWebsocket=false;
 
@@ -83,12 +85,18 @@ class Engine {
 
     get engine() { return this.engine; }
     get socket() { return this; }
-    constructor(engine,td, te, tcp, data) {
+    get type() { return this.#type; }
+    constructor(engine,td, te, tcp, server, data, type) {
       this.#td = td;
       this.#te = te;
       this.#tcp = tcp;
       this.#data = data;
+      this.#type = type;
+      this.#server = server;
       this.#engine = engine;
+
+      //console.log(server);
+      //console.log(Object.getOwnPropertyDescriptors(Object.getPrototypeOf(server)));
 
       let encodings=this.client.headers["accept-encoding"];
       //console.log("encodings",encodings,encodings&&encodings.includes("gzip"))
@@ -503,7 +511,7 @@ class Engine {
     };
   };
 
-  async #listener(conn:Deno.Conn): Promise<void> {
+  async #listener(server, conn:Deno.Conn, type:string): Promise<void> {
     //conn.accept();
     const encoder = this.#te;
     const decoder = this.#td;
@@ -513,7 +521,7 @@ class Engine {
     const length = await conn.read(dat).catch(e=>err=e);
     if(typeof length!="number"||length<=0)return this.#emit("null data", {conn,length,err});
     const data = dat.slice(0, length);
-    const socket = new this.#Socket(this,decoder, encoder, conn, data);
+    const socket = new this.#Socket(this,decoder, encoder, conn, server, data, type);
     this.#emit("connect", socket);
   };
   get Socket(){ return this.#Socket; };

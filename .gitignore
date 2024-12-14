@@ -1,5 +1,7 @@
 # personal
+http/70/*
 http/80/*
+http/443/*
 
 # dynamic files
 logcat.out
