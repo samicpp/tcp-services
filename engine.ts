@@ -19,26 +19,35 @@ class Engine {
   deno = this.#Deno;
   #te = new TextEncoder();
   #td = new TextDecoder();
+  #servers:any[]=[];
 
   port: number = 80;
   host: string = "0.0.0.0";
+  tls: TlsOptions;
   get server() {
-    return this.#Deno.listen({ port: this.port, host: this.host });
+    let i=this.#servers.push(
+      this.#Deno.listen({ port: this.port, host: this.host })
+    );
+    return this.#servers[i-1];
+  }
+  get tlsServer() {
+    //return this.#Deno.listenTls({ port: this.port, host: this.host, ...this.tls });
+    let i=this.#servers.push(
+      this.#Deno.listenTls({ port: this.port, host: this.host, ...this.tls, rejectUnauthorized: false })
+    );
+    return this.#servers[i-1];
   }
 
   constructor() {}
 
-  async start(tls?:object ,port?: number): Promise<void> {
+  async start(port?: number, tls?: TlsOptions): Promise<void> {
     if (port) this.port = port;
-    if(!tls){
-      const server = this.server;
-      //console.log('server created on',this.port)
-      for await (const conn of server) {
-        //conn.readable.pipeTo(conn.writable);
-        this.#listener(conn);
-      }
-    } else {
-      ;
+    if (tls) this.tls=tls;
+    const server = tls?this.tlsServer:this.server;
+    //console.log('server created on',this.port)
+    for await (const conn of server) {
+      //conn.readable.pipeTo(conn.writable);
+      this.#listener(conn);
     }
   }
 
@@ -491,13 +500,15 @@ class Engine {
     };
   };
 
-  async #listener(conn): Promise<void> {
+  async #listener(conn:Deno.TcpConn): Promise<void> {
     //conn.accept();
     const encoder = this.#te;
     const decoder = this.#td;
     let dat = new Uint8Array(this.readSize);
     //console.log('incoming connection',conn);
-    const length = await conn.read(dat);
+    let err=null;
+    const length = await conn.read(dat).catch(e=>err=e);
+    if(typeof length!="number"||length<=0)return this.#emit("null data", {conn,length,err});
     const data = dat.slice(0, length);
     const socket = new this.#Socket(this,decoder, encoder, conn, data);
     this.#emit("connect", socket);

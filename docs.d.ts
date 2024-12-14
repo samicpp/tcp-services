@@ -32,18 +32,19 @@ interface Engine {
      * 
      * @param port Optional. Port to start the server on. Defaults to `Engine.port` if not provided.
      */
-    start(port?: number): Promise<void>;
+    start(port?: number, tls?: TlsOptions): Promise<void>;
 
     /**
      * Attaches an event listener for server events.
      * 
      * Supported events:
-     * - `connection`: Triggered when a new client connects. Provides an `HTTPSocket` instance.
+     * - `connection`: Triggered when a new client connects. Provides a `HTTPSocket` instance.
+     * - `null data`: Triggered when a new client doesn't send any data. Provides a `TcpConn` instance.
      * 
      * @param event The name of the event to listen for.
      * @param listener The callback function to invoke with event data.
      */
-    on(event: 'connection', listener: (data: HTTPSocket | object) => void): void;
+    on(event: 'connection', listener: (data: HTTPSocket | any) => void): void;
 
     /**
      * Internal HTTPSocket class reference.
@@ -56,6 +57,18 @@ interface Engine {
      * @internal This property should not be accessed directly.
      */
     readonly WebSocket: WebSocket;
+}
+
+/**
+ * TlsOptions: In here there are properties needed to make a tls server
+ * 
+ * @property cert The tls certificate
+ * @property key The tls certificate key
+ */
+interface TlsOptions{
+    cert: string,
+    key: string,
+    ca?: string,
 }
 
 /**
@@ -288,7 +301,7 @@ interface WebSocket {
      * @param event The name of the event to listen for.
      * @param listener The callback function to invoke with event data.
      */
-    on(event: string, listener: (data: WsFrame | Error | object) => void): void;
+    on(event: string, listener: (data: WsFrame | Error | any) => void): void;
 }
 
 /**
