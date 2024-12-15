@@ -45,9 +45,10 @@ export async function listener({socket,client}: HTTPSocket){
         }();
       }
     };
-    try{url=new SpecialURL(`${proxied?client.headers["x-scheme"]:"http"}://${proxied?client.headers["x-forwarded-host"]:client.headers.host}${client.path}`);}catch(err){console.error(err)};
-    url=new SpecialURL(`about:blank#invalid`);
-    //console.log(url);
+    try{url=new SpecialURL(`${proxied?client.headers["x-scheme"]:(socket.type=="tcp::tls"?"https":"http")}://${proxied?client.headers["x-forwarded-host"]:client.headers.host}${client.path}`);}catch(err){console.error(err);isValid=false};
+    if(!isValid)url=new SpecialURL(`about:blank#invalid`);
+    
+    console.log(url.toString());
     
     async function exists(get){
       let ret;
@@ -121,6 +122,7 @@ export async function listener({socket,client}: HTTPSocket){
         socket.close();*/
         const dirs: any[] = [];
         let lookfor: string[]=["index."]
+        let getDirs=get.split("/");
         if(getDirs[getDirs.length-1])lookfor.push(getDirs[getDirs.length-1]);
         let match={isFile:false,name:""};
 
@@ -217,7 +219,7 @@ export async function listener({socket,client}: HTTPSocket){
       let get=`./${url.defdir}/${url.tardir}/${url.pathname.replaceAll(/\.+/g, ".").replaceAll(/\.\//g, "/").replace(/\/$/, "")}`;
       get=get.replaceAll(/\/+/g,"/").replace(/\/+$/,"");
       console.log("get",get);
-      let getDirs=get.split("/");
+      
       
       await handler(get);
     } else {
