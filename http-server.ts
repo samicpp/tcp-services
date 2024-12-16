@@ -49,6 +49,7 @@ export async function listener({socket,client}: HTTPSocket){
     if(!isValid)url=new SpecialURL(`about:blank#invalid`);
     
     console.log(url.toString());
+    console.log(client.address)
     
     async function exists(get){
       let ret;
@@ -157,14 +158,14 @@ export async function listener({socket,client}: HTTPSocket){
 
       if(last.endsWith(".deno.ts")){
         //console.log("importing deno thing",get);
-        if(dyn[get].active){
-          dyn[get].default(socket,url,get);
+        if(dyn[get]?.state&&dyn[get].state?.active){
+          dyn[get].mod.default(socket,url,get);
         } else {
           let mod=await import(get+"?d="+Date.now()); //anti chacheing
           //await new Promise(r=>r(mod.default(socket,url,get)));
           mod.init(socket,url,get,()=>{dyn[get].active=false},dyn[get]);
-          dyn[get]=mod;
-          dyn[get].active=true;
+          dyn[get]={mod,state:{...mod.state}};
+          dyn[get].state.active=true;
         }
       }else if(last.endsWith(".async.js")){
         let t=td.decode(bytes);

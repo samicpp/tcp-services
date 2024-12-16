@@ -7,6 +7,7 @@ let ws:WebSocket;
 let td=new TextDecoder;
 let te=new TextEncoder;
 let closing=false;
+//let active=true;
 
 function handler(frame:WsFrame){
     console.log("ws.deno.ts frame",frame);
@@ -37,11 +38,11 @@ function handler(frame:WsFrame){
     }
 }
 
-export default async function(socket: HTTPSocket, url, get){
+export default async function(socket: HttpSocket, url, get){
     socket.close(); 
     del();
 }
-export async function init(socket: HTTPSocket, url: URL, get: string, dele: ()=> void, past: any|void){
+export async function init(socket: HttpSocket, url: URL, get: string, dele: ()=> void, past: any|void){
     del=dele;
     const {client}=socket;
     console.log("ws.deno.ts",socket.client);
@@ -62,3 +63,8 @@ export async function init(socket: HTTPSocket, url: URL, get: string, dele: ()=>
 
     dele();
 }
+
+//export {active};
+export const state:{active:boolean}={
+    active:false,
+};

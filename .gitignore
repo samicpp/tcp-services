@@ -7,3 +7,4 @@ http/443/*
 logcat.out
 logcat.log
 last-pid.txt
+log/*
