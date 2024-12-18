@@ -102,6 +102,7 @@ if(args.opt.help)console.log()
 
 let ports=args.opt.http||[80];
 let sports=args.opt.https||[443];
+let dports=args.opt.httpd||[];
 let silent=args.opt.silent||args.sopt.includes("s");
 
 console.allow=!silent;
@@ -129,6 +130,8 @@ const tcp: Engine=new Engine();
 for(let port of ports)tcp.start(parseInt(port));
 tcp.tls=tlsopt;
 for(let sport of sports)tcp.start(parseInt(sport));
+tcp.upgrade=true;
+for(let dport of dports)tcp.start(parseInt(dport));
 tcp.on("connect",http.listener);
 tcp.on("null data",e=>console.log("no data"));
 

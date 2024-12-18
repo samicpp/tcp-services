@@ -20,10 +20,13 @@ class Engine {
   #te = new TextEncoder();
   #td = new TextDecoder();
   #servers:any[]=[];
+  #cache:any[]=[];
 
   port: number = 80;
   host: string = "0.0.0.0";
   tls: TlsOptions;
+  upgrade: boolean;
+
   get server() {
     let i=this.#servers.push(
       this.#Deno.listen({ port: this.port, host: this.host })
@@ -40,15 +43,23 @@ class Engine {
 
   constructor() {}
 
-  async start(port?: number, tls?: TlsOptions): Promise<void> {
+  async start(port?: number, tls?: TlsOptions, upgrade?: boolean): Promise<void> {
+    if (upgrade) this.upgrade = upgrade;
     if (port) this.port = port;
     if (tls) this.tls=tls;
-    const server = this.tls?this.tlsServer:this.server;
-    const type = this.tls?"tcp::tls":"tcp";
+
+    const server = this.tls&&!this.upgrade?this.tlsServer:this.server;
+    const type = this.tls&&!this.upgrade?(this.tls?"tcp::tls":"tcp"):"tcp";
+    const cacheId=this.#cache.push({
+      tls:this.tls,
+      port:this.port,
+      upgrade:this.upgrade,
+      readSize:this.readSize,
+    })-1;
     //console.log('server created on',this.port)
     for await (const conn of server) {
       //conn.readable.pipeTo(conn.writable);
-      this.#listener(server, conn, type);
+      this.#listener(server, conn, type, cacheId);
     }
   }
 
@@ -515,18 +526,39 @@ class Engine {
     };
   };
 
-  async #listener(server, conn:Deno.Conn, type:string): Promise<void> {
+  async #listener(server, conn:Deno.Conn, type:string, cacheId: number): Promise<void> {
     //conn.accept();
     const encoder = this.#te;
     const decoder = this.#td;
+    const cache = this.#cache[cacheId];
     let dat = new Uint8Array(this.readSize);
     //console.log('incoming connection',conn);
     let err=null;
     const length = await conn.read(dat).catch(e=>err=e);
     if(typeof length!="number"||length<=0)return this.#emit("null data", {conn,length,err});
     const data = dat.slice(0, length);
-    const socket = new this.#Socket(this,decoder, encoder, conn, server, data, type);
-    this.#emit("connect", socket);
+
+    if(cache.upgrade&&data[0]==22){
+      const tlsConn=await this.#Deno.startTls(conn,cache.tls);
+      //console.log(tlsConn.writable);
+      let w=tlsConn.writable.getWriter(data);
+      console.log(data);
+      await w.ready; await w.write(data).catch(e=>e); await w.close().catch(e=>e);
+      console.log(w);
+
+      let dat=new Uint8Array(cache.readSize);
+      const length2 = await conn.read(dat).catch(e=>err=e);
+      if(typeof length2!="number"||length2<=0)return this.#emit("null data", {tlsConn,length2,err});
+      const data2 = dat.slice(0, length2);
+      const type=`tcp::tls`
+      const socket = new this.#Socket(this,decoder, encoder, tlsConn, server, data2, type);
+      this.#emit("connect", socket);
+    }
+    //console.log(data);
+    else{
+      const socket = new this.#Socket(this,decoder, encoder, conn, server, data, type);
+      this.#emit("connect", socket);
+    }
   };
   get Socket(){ return this.#Socket; };
   get WebSocket(){ return this.#WebSocket; };

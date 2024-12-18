@@ -9,7 +9,7 @@ Currently I only have 1 service.
 
 ### engine.ts
 Methods and use cases specified in `docs.ts`.
-Responsible for handling the HTTP (or WebSocket) connection starting from the TCP/UDP level with or without TLS.
+Responsible for handling the HTTP (or WebSocket) connections starting from the TCP/UDP level with or without TLS.
 
 
 ### http-server.ts
@@ -26,4 +26,4 @@ The server will read and parse `config.json` everytime when a request happens an
 Paths to directories dont need to start with `/` and files are allowed to end with `/`.
 
 When an error occours it will use the error files located in SpecialURL.tardir+`/errors/`+status code.
-If it cant find an error file it wll send out a default response.
+If it can't find an error file it wll send out a default response.
