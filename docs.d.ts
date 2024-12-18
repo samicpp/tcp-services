@@ -1,3 +1,4 @@
+// engine.ts
 /**
  * Engine: The main server interface for managing TCP, HTTP, and WebSocket connections.
  * 
@@ -361,3 +362,11 @@ engine.on("connection",async function({socket,client}: HTTPSocket): Promise<void
 });
 
 */
+
+// http-server.ts
+interface SpecialURL extends URL{
+    /**
+     * In here is the directory in which it will look for files
+     */
+    readonly tardir: string;
+}
