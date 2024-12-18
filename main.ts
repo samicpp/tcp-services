@@ -64,7 +64,7 @@ let keys=Object.keys(Object.getOwnPropertyDescriptors(console));
 console.allow=true;
 wraploop:for(let p of keys){
     //console.log(p);
-    if(["indentLevel"].includes(p))continue wraploop; // label not needed
+    if(["indentLevel","assert"].includes(p)){continue wraploop}; // label not needed
     console["_"+p]=console[p];
     let f=console[p].bind(console);
     console[p]=async function(...args){

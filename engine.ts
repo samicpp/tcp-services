@@ -541,9 +541,12 @@ class Engine {
     if(cache.upgrade&&data[0]==22){
       const tlsConn=await this.#Deno.startTls(conn,cache.tls);
       //console.log(tlsConn.writable);
-      let w=tlsConn.writable.getWriter(data);
+      let w=tlsConn.writable.getWriter();
       console.log(data);
-      await w.ready; await w.write(data).catch(e=>e); await w.close().catch(e=>e);
+      await w.ready; 
+      await w.write(data).catch(e=>e); 
+      await w.releaseLock();
+      //await w.close().catch(e=>e);
       console.log(w);
 
       let dat=new Uint8Array(cache.readSize);
