@@ -1,0 +1,22 @@
+[package]
+name = "tls"
+version = "0.1.0"
+edition = "2021"
+autors = ["OpenAI's GPT-4o"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[dependencies]
+deno_core = "0.203.0"
+tokio = { version = "1", features = ["full"] }
+rustls = "0.21"
+tokio-rustls = "0.23"
+async-trait = "0.1.67"
+deno_bindgen = "0.9.0-alpha"
+rustls-pemfile = "1.0"
+
+[lib]
+crate-type = ["cdylib"] # Required for building a shared library
+
+
