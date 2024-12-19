@@ -27,6 +27,24 @@ class Engine {
   tls: TlsOptions;
   upgrade: boolean;
 
+  
+  //new
+  proxied: boolean=false;
+
+  pHost: string="0.0.0.0";
+
+  intPort: number=1;
+  intHost: string="127.0.0.1";
+  intTlsPort: number=2;
+  intTlsOpt: TlsOptions={
+    ca: "",
+    key: "",
+    cert: "",
+  };
+
+  #conf:{intHost,intPort,intTlsPort,intTlsOpt};
+  
+
   get server() {
     let i=this.#servers.push(
       this.#Deno.listen({ port: this.port, host: this.host })
@@ -41,7 +59,67 @@ class Engine {
     return this.#servers[i-1];
   }
 
-  constructor() {}
+  constructor(intPort?:number,intTlsPort?:number,intTlsOpt?:TlsOptions) {
+    if(arguments.length>0){
+      this.proxied=true;
+      this.intPort=intPort;
+      this.intTlsPort=intTlsPort;
+      this.intTlsOpt=intTlsOpt;
+    };
+  }
+
+  async #int(port,address){
+    return this.#Deno.listen({port, address});
+  }
+  async #intTls(port,address,opt){
+    return this.#Deno.listenTls({port, address, ...opt});
+  }
+  #proxyStarted=false;
+  #proxies:any[]=[];
+  #proxied:any[]=[];
+  async#startProxy(){
+    if(this.#proxyStarted){
+      this.#proxies.push(this.#int(this.intPort,this.intHost));
+      if(this.intTlsOpt){
+        this.#proxies.push(this.#intTls(this.intTlsPort,this.intHost,this.intTlsOpt));
+      };
+      this.#conf={
+        intHost:this.intHost,
+        intPort:this.intPort,
+        intTlsPort:this.intTlsPort,
+        intTlsOpt:this.intTlsOpt,
+      };
+      this.#proxyStarted=true;
+    };
+  }
+  async proxy(port:number){
+    await this.#startProxy();
+
+    const proxy=this.#Deno.listen({port,host:this.pHost});
+    this.#proxied.push({proxy});
+
+    for await(const con of proxy){
+      const buf = new Uint8Array(this.readSize);
+      const len = await con.read(buf);  
+      const buff = buf.subarray(0,len);
+
+      if(buff[0]==22&&this.#proxies[1]){
+        const proxy=await Deno.connect({port: 8443});
+        const tlsConn=await tls.accept();
+
+        proxy.write(buff);
+        conn.readable.pipeTo(proxy.writable);
+        proxy.readable.pipeTo(conn.writable);
+
+        // resume normal activity
+
+      } else { // this is really not needed
+        const conn=await this.#Deno.connect({port:this.#conf.intHost});
+        conn.readable.pipeTo(con.writable);
+        conn.writable.pipeTo(con.readable);
+      }
+    }
+  }
 
   async start(port?: number, tls?: TlsOptions, upgrade?: boolean): Promise<void> {
     if (upgrade) this.upgrade = upgrade;
@@ -538,7 +616,7 @@ class Engine {
     if(typeof length!="number"||length<=0)return this.#emit("null data", {conn,length,err});
     const data = dat.slice(0, length);
 
-    if(cache.upgrade&&data[0]==22){
+    if(cache.upgrade&&data[0]==22&&false){
       const tlsConn=new this.#Deno.TlsConn(conn,{
         ...cache.tls,
         caCerts: cache.tls.ca
