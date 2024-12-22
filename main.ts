@@ -100,9 +100,9 @@ await logfile.log("system",`start of ${import.meta.url}`);
 
 if(args.opt.help)console.log()
 
-let ports=args.opt.http||[80];
-let sports=args.opt.https||[443];
-let dports=args.opt.httpd||[];
+let ports=args.opt.http||[];
+let sports=args.opt.https||[];
+let dports=args.opt.dyn||[];
 let silent=args.opt.silent||args.sopt.includes("s");
 
 console.allow=!silent;
@@ -126,14 +126,28 @@ let tlsopt: TlsOptions={
     ca: deno.readTextFileSync("D:\\chain.pem"),
 };
 
+
 const tcp: Engine=new Engine();
 for(let port of ports)tcp.start(parseInt(port));
 tcp.tls=tlsopt;
 for(let sport of sports)tcp.start(parseInt(sport));
-tcp.upgrade=true;
-for(let dport of dports)tcp.start(parseInt(dport));
+tcp.proxied=true;
+tcp.intTlsOpt=tlsopt;
+for(let dport of dports)tcp.proxy(parseInt(dport));
 tcp.on("connect",http.listener);
 tcp.on("null data",e=>console.log("no data"));
 
 console.log('pid: ',deno.pid);
 await deno.writeTextFile("last-pid.txt", deno.pid);
+
+
+/*
+;(async e=>{
+    for await (const c of deno.stdin.readable) {
+        try{
+            deno.stdout.write(tc.e(deno.inspect(eval(tc.d(c)))+"\r\n"));
+        } catch(err){
+            deno.stdout.write(tc.e(deno.inspect(err)+"\r\n"));
+        };
+    };
+})();// */

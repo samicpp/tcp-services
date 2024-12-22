@@ -16,7 +16,7 @@ const TypedArray=Object.getPrototypeOf(Uint8Array.prototype).constructor;
 
 class Engine {
   #Deno = Deno;
-  deno = this.#Deno;
+  //deno = this.#Deno;
   #te = new TextEncoder();
   #td = new TextDecoder();
   #servers:any[]=[];
@@ -42,7 +42,7 @@ class Engine {
     cert: "",
   };
 
-  #conf:{intHost,intPort,intTlsPort,intTlsOpt};
+  #conf:{intHost:string,intPort:number,intTlsPort:number,intTlsOpt:TlsOptions};
   
 
   get server() {
@@ -78,10 +78,13 @@ class Engine {
   #proxies:any[]=[];
   #proxied:any[]=[];
   async#startProxy(){
-    if(this.#proxyStarted){
-      this.#proxies.push(this.#int(this.intPort,this.intHost));
+    if(!this.#proxyStarted){
+      this.#proxyStarted=true;
+      let opt:[number,string]=[this.intPort,this.intHost];
+      this.#proxies.push([opt,await this.#int(...opt)]);
       if(this.intTlsOpt){
-        this.#proxies.push(this.#intTls(this.intTlsPort,this.intHost,this.intTlsOpt));
+        let opt:[number,string,TlsOptions]=[this.intTlsPort,this.intHost,this.intTlsOpt];
+        this.#proxies.push([opt,await this.#intTls(...opt)]);
       };
       this.#conf={
         intHost:this.intHost,
@@ -89,7 +92,6 @@ class Engine {
         intTlsPort:this.intTlsPort,
         intTlsOpt:this.intTlsOpt,
       };
-      this.#proxyStarted=true;
     };
   }
   async proxy(port:number){
@@ -98,25 +100,30 @@ class Engine {
     const proxy=this.#Deno.listen({port,host:this.pHost});
     this.#proxied.push({proxy});
 
+
     for await(const con of proxy){
       const buf = new Uint8Array(this.readSize);
       const len = await con.read(buf);  
       const buff = buf.subarray(0,len);
 
-      if(buff[0]==22&&this.#proxies[1]){
-        const proxy=await Deno.connect({port: 8443});
-        const tlsConn=await tls.accept();
+      if(buff[0]==22&&this.#proxies[1]){ // tls
+        const proxy=await this.#Deno.connect({port: this.#proxies[1][0][0]});
+        const tlsConn=await this.#proxies[1][1].accept();
 
         proxy.write(buff);
-        conn.readable.pipeTo(proxy.writable);
-        proxy.readable.pipeTo(conn.writable);
+        con.readable.pipeTo(proxy.writable);
+        proxy.readable.pipeTo(con.writable);
 
-        // resume normal activity
+        this.#listener(this.#proxies[1][1],tlsConn,"tcp::tls",-1,con.remoteAddr);
+      } else { // anything else
+        const proxy=await this.#Deno.connect({port: this.#proxies[0][0][0]});
+        const conn=await this.#proxies[0][1].accept();
 
-      } else { // this is really not needed
-        const conn=await this.#Deno.connect({port:this.#conf.intHost});
-        conn.readable.pipeTo(con.writable);
-        conn.writable.pipeTo(con.readable);
+        proxy.write(buff);
+        con.readable.pipeTo(proxy.writable);
+        proxy.readable.pipeTo(con.writable);
+
+        this.#listener(this.#proxies[0][1],conn,"tcp",-1,con.remoteAddr);
       }
     }
   }
@@ -157,7 +164,7 @@ class Engine {
   get readSize():number{return this.#readSize};
   
   #Socket = class HttpSocket {
-    #engine; #tcp;
+    #engine; #tcp; #ra;
     #td; #te; #data;
     #server; #type;
 
@@ -175,12 +182,13 @@ class Engine {
     get engine() { return this.engine; }
     get socket() { return this; }
     get type() { return this.#type; }
-    constructor(engine,td, te, tcp, server, data, type) {
+    constructor(engine,td, te, tcp, server, data, type, remoteAddr) {
       this.#td = td;
       this.#te = te;
       this.#tcp = tcp;
       this.#data = data;
       this.#type = type;
+      this.#ra=remoteAddr;
       this.#server = server;
       this.#engine = engine;
 
@@ -206,7 +214,7 @@ class Engine {
         data: string;
         //proxied: boolean;
       }();
-      c.address = this.#tcp.remoteAddr;
+      c.address = this.#ra;
 
       try {
         let str = this.#td.decode(this.#data);
@@ -243,7 +251,7 @@ class Engine {
     encoding: string = "gzip";
     #headers: Record<string, string> = {
       "Content-Type": "text/html",
-      "Transfer-Encoding": "chunked",
+      //"Transfer-Encoding": "chunked",
       "Connection":"keep-alive",
       "Keep-Alive":"timeout=5",
       "Server":"TI-84 Plus CE-T Python Edition",
@@ -251,7 +259,15 @@ class Engine {
     };
     #headersSent = false;
     #headersPromise: Promise<void>;
-    async #writeTcp(data){await this.#tcp.write(data).catch(e=>e);};
+    async #writeTcp(data){return await this.#tcp.write(data).catch(e=>e);};
+    #headerString(){
+      let headers: string[] = [];
+      for (let k in this.#headers) {
+        let v = this.#headers[k];
+        headers.push(`${k}: ${v}`);
+      }
+      return `HTTP/1.1 ${this.status} ${this.statusMessage}\r\n${headers.join("\r\n")}\r\n\r\n`;
+    }
     async #sendHeaders(length:number): Promise<void> {
       if (!this.#headersSent) {
         let resolve;
@@ -260,14 +276,9 @@ class Engine {
 
         //this.#headers["Content-Length"]=length.toString();
 
-        let headers: string[] = [];
-        for (let k in this.#headers) {
-          let v = this.#headers[k];
-          headers.push(`${k}: ${v}`);
-        }
         await this.#writeTcp(
           this.#te.encode(
-            `HTTP/1.1 ${this.status} ${this.statusMessage}\r\n${headers.join("\r\n")}\r\n\r\n`,
+            this.#headerString(),
           ),
         );
         resolve();
@@ -295,6 +306,7 @@ class Engine {
     }
     async writeText(text: string): Promise<void> {
       if(this.#isWebsocket)return;
+      this.setHeader("Transfer-Encoding","chunked");
       let b=this.#te.encode(text);
       if(this.compress){
         this.setHeader("Content-Encoding", "gzip");
@@ -305,6 +317,7 @@ class Engine {
     }
     async writeBuffer(buffer: ArrayBuffer): Promise<void> {
       if(this.#isWebsocket)return;
+      this.setHeader("Transfer-Encoding","chunked");
       let b=buffer;
       if(this.compress){
         this.setHeader("Content-Encoding", "gzip");
@@ -316,9 +329,24 @@ class Engine {
     async close(data?: string | ArrayBuffer): Promise<void> {
       if(this.#isWebsocket)return;
       //await this.#sendHeaders(0);
-      if (typeof data == "string") await this.writeText(data);
-      if (typeof data == "object") await this.writeBuffer(data);
-      await this.#writeTcp(this.#te.encode("0\r\n\r\n"));
+      if(this.#headersSent){
+        if (typeof data == "string") await this.writeText(data);
+        if (typeof data == "object") await this.writeBuffer(data);
+        await this.#writeTcp(this.#te.encode("0\r\n\r\n"));
+      } else {
+        let b=data;
+        if (typeof data == "string") b=this.#te.encode(data);
+        if(this.compress){
+          this.setHeader("Content-Encoding", "gzip");
+          if(this.encoding=="gzip")b=compress.gzip(b);
+        };
+        this.#headers["Content-Length"]=b.byteLength.toString();
+        const head=this.#te.encode(this.#headerString());
+        const pack=new Uint8Array(head.byteLength+b.byteLength);
+        pack.set(head);
+        pack.set(b,head.byteLength);
+        this.#writeTcp(pack);
+      }
       this.#tcp.close();
     }
     deny(){if(!this.#isWebsocket)this.#tcp.close()}
@@ -604,11 +632,11 @@ class Engine {
     };
   };
 
-  async #listener(server, conn:Deno.Conn, type:string, cacheId: number): Promise<void> {
+  async #listener(server, conn:Deno.Conn, type:string, cacheId: number, remoteAddr=conn.remoteAddr): Promise<void> {
     //conn.accept();
     const encoder = this.#te;
     const decoder = this.#td;
-    const cache = this.#cache[cacheId];
+    //const cache = this.#cache[cacheId];
     let dat = new Uint8Array(this.readSize);
     //console.log('incoming connection',conn);
     let err=null;
@@ -616,7 +644,7 @@ class Engine {
     if(typeof length!="number"||length<=0)return this.#emit("null data", {conn,length,err});
     const data = dat.slice(0, length);
 
-    if(cache.upgrade&&data[0]==22&&false){
+    if(false&&cache.upgrade&&data[0]==22){
       const tlsConn=new this.#Deno.TlsConn(conn,{
         ...cache.tls,
         caCerts: cache.tls.ca
@@ -640,7 +668,7 @@ class Engine {
     }
     //console.log(data);
     else{
-      const socket = new this.#Socket(this,decoder, encoder, conn, server, data, type);
+      const socket = new this.#Socket(this,decoder, encoder, conn, server, data, type, remoteAddr);
       this.#emit("connect", socket);
     }
   };
@@ -650,6 +678,17 @@ class Engine {
     if(sec!=secid)return null;
     else return this.#WebSocket;
   };*/
+
+  private(name:string){
+    switch(name){
+      case'#proxies':
+        return this.#proxies;
+      case'#proxied':
+        return this.#proxied;
+      default:
+        return this[name];
+    }
+  };
 }
 
 export default Engine;

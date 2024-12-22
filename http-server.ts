@@ -149,46 +149,50 @@ export async function listener({socket,client}: HTTPSocket){
         }
     };
     async function file(get:string,opt?:object): Promise<void>{
-      const bytes = await Deno.readFile(get);
-      let last=get.replace(/.*\//,"");
-      console.log("file found",bytes.byteLength);
-      let ext=last.split(".");
-      let lext=ext[ext.length-1];
-      let dct=mime[""+lext];
+      try{
+        const bytes = await Deno.readFile(get);
+        let last=get.replace(/.*\//,"");
+        console.log("file found",bytes.byteLength);
+        let ext=last.split(".");
+        let lext=ext[ext.length-1];
+        let dct=mime[""+lext];
 
-      if(last.endsWith(".deno.ts")){
-        //console.log("importing deno thing",get);
-        if(dyn[get]?.state&&dyn[get].state?.active){
-          dyn[get].mod.default(socket,url,get);
-        } else {
-          let mod=await import(get+"?d="+Date.now()); //anti chacheing
-          //await new Promise(r=>r(mod.default(socket,url,get)));
-          mod.init(socket,url,get,()=>{dyn[get].active=false},dyn[get]);
-          dyn[get]={mod,state:{...mod.state}};
-          dyn[get].state.active=true;
+        if(last.endsWith(".deno.ts")){
+          //console.log("importing deno thing",get);
+          if(dyn[get]?.state&&dyn[get].state?.active){
+            dyn[get].mod.default(socket,url,get);
+          } else {
+            let mod=await import(get+"?d="+Date.now()); //anti chacheing
+            //await new Promise(r=>r(mod.default(socket,url,get)));
+            mod.init(socket,url,get,()=>{dyn[get].active=false},dyn[get]);
+            dyn[get]={mod,state:{...mod.state}};
+            dyn[get].state.active=true;
+          }
+        }else if(last.endsWith(".async.js")){
+          let t=td.decode(bytes);
+          let f=AsyncFunction("socket,url,get,opt",t);
+          f(socket,url,get,opt);
+        }else if(/.*\.dyn\.[a-z]+/.test(last)&&dct){
+          let t=td.decode(bytes);
+          let f=AsyncFunction("socket,url,get,opt",`return \`${t.replaceAll("`","\\`")}\`;`);
+          let r=await f(socket,url,get,opt);
+          socket.setHeader("Content-Type",dct);
+          socket.close(r);
+        }else if(dct){
+          socket.setHeader("Content-Type",dct);
+          socket.close(bytes);
+          //socket.close();
+        }else{
+          console.log("idk",last);
+          socket.status=204;
+          socket.close();
         }
-      }else if(last.endsWith(".async.js")){
-        let t=td.decode(bytes);
-        let f=AsyncFunction("socket,url,get,opt",t);
-        f(socket,url,get,opt);
-      }else if(/.*\.dyn\.[a-z]+/.test(last)&&dct){
-        let t=td.decode(bytes);
-        let f=AsyncFunction("socket,url,get,opt",`return \`${t.replaceAll("`","\\`")}\`;`);
-        let r=await f(socket,url,get,opt);
-        socket.setHeader("Content-Type",dct);
-        socket.close(r);
-      }else if(dct){
-        socket.setHeader("Content-Type",dct);
-        socket.close(bytes);
-        //socket.close();
-      }else{
-        console.log("idk",last);
-        socket.status=204;
-        socket.close();
-      }
 
-      //await socket.writeBuffer(bytes);
-      //socket.close();
+        //await socket.writeBuffer(bytes);
+        //socket.close();
+      }  catch (err){
+          console.error(err);
+      }
     }
 
     async function handler(get){
