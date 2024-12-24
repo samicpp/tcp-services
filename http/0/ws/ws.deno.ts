@@ -8,6 +8,7 @@ let td=new TextDecoder;
 let te=new TextEncoder;
 let closing=false;
 //let active=true;
+console.log("ws.deno.ts");
 
 function handler(frame:WsFrame){
     console.log("ws.deno.ts frame",frame);

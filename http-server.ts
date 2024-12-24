@@ -8,7 +8,7 @@ const td=new TextDecoder();
 
 const dyn={};
 
-export async function listener({socket,client}: HTTPSocket){
+export async function listener({socket,client}: HttpSocket){
     let proxied=false;
     let isValid=client.isValid;
     /*if(!client.isValid){

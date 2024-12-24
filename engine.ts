@@ -309,8 +309,12 @@ class Engine {
       this.setHeader("Transfer-Encoding","chunked");
       let b=this.#te.encode(text);
       if(this.compress){
-        this.setHeader("Content-Encoding", "gzip");
-        if(this.encoding=="gzip")b=compress.gzip(b);
+        try{
+          if(this.encoding=="gzip")b=compress.gzip(b);
+          this.setHeader("Content-Encoding", "gzip");
+        } catch(err){
+          ;
+        };
       }
       await this.#sendHeaders(text.length);
       await this.#writeChunk(b);
@@ -320,8 +324,12 @@ class Engine {
       this.setHeader("Transfer-Encoding","chunked");
       let b=buffer;
       if(this.compress){
-        this.setHeader("Content-Encoding", "gzip");
-        if(this.encoding=="gzip")b=compress.gzip(b);
+        try{
+          if(this.encoding=="gzip")b=compress.gzip(b);
+          this.setHeader("Content-Encoding", "gzip");
+        } catch(err){
+          ;
+        };
       }
       await this.#sendHeaders(buffer.byteLength);
       await this.#writeChunk(b);
@@ -337,15 +345,20 @@ class Engine {
         let b=data;
         if (typeof data == "string") b=this.#te.encode(data);
         if(this.compress){
-          this.setHeader("Content-Encoding", "gzip");
-          if(this.encoding=="gzip")b=compress.gzip(b);
+          try{
+            if(this.encoding=="gzip")b=compress.gzip(b);
+            this.setHeader("Content-Encoding", "gzip");
+          } catch(err){
+            ;
+          };
         };
         this.#headers["Content-Length"]=b.byteLength.toString();
         const head=this.#te.encode(this.#headerString());
         const pack=new Uint8Array(head.byteLength+b.byteLength);
         pack.set(head);
         pack.set(b,head.byteLength);
-        this.#writeTcp(pack);
+        
+        await this.#writeTcp(pack);
       }
       this.#tcp.close();
     }
