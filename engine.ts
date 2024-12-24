@@ -95,36 +95,43 @@ class Engine {
     };
   }
   async proxy(port:number){
-    await this.#startProxy();
+    try{
+      await this.#startProxy();
 
-    const proxy=this.#Deno.listen({port,host:this.pHost});
-    this.#proxied.push({proxy});
+      function except(conn,proxy,e){/*conn.close();proxy.close();*/return e};
+      function then(conn,proxy,e){/*conn.close();proxy.close();*/return e};
+
+      const proxy=this.#Deno.listen({port,host:this.pHost});
+      this.#proxied.push({proxy});
 
 
-    for await(const con of proxy){
-      const buf = new Uint8Array(this.readSize);
-      const len = await con.read(buf);  
-      const buff = buf.subarray(0,len);
+      for await(const con of proxy){
+        const buf = new Uint8Array(this.readSize);
+        const len = await con.read(buf);  
+        const buff = buf.subarray(0,len);
 
-      if(buff[0]==22&&this.#proxies[1]){ // tls
-        const proxy=await this.#Deno.connect({port: this.#proxies[1][0][0]});
-        const tlsConn=await this.#proxies[1][1].accept();
+        if(buff[0]==22&&this.#proxies[1]){ // tls
+          const proxy=await this.#Deno.connect({port: this.#proxies[1][0][0]});
+          const tlsConn=await this.#proxies[1][1].accept();
 
-        proxy.write(buff);
-        con.readable.pipeTo(proxy.writable);
-        proxy.readable.pipeTo(con.writable);
+          proxy.write(buff);
+          con.readable.pipeTo(proxy.writable).then(then.bind(null,con,proxy)).catch(except.bind(null,con,proxy));
+          proxy.readable.pipeTo(con.writable).then(then.bind(null,con,proxy)).catch(except.bind(null,con,proxy));
 
-        this.#listener(this.#proxies[1][1],tlsConn,"tcp::tls",-1,con.remoteAddr);
-      } else { // anything else
-        const proxy=await this.#Deno.connect({port: this.#proxies[0][0][0]});
-        const conn=await this.#proxies[0][1].accept();
+          this.#listener(this.#proxies[1][1],tlsConn,"tcp::tls",-1,con.remoteAddr);
+        } else { // anything else
+          const proxy=await this.#Deno.connect({port: this.#proxies[0][0][0]});
+          const conn=await this.#proxies[0][1].accept();
 
-        proxy.write(buff);
-        con.readable.pipeTo(proxy.writable);
-        proxy.readable.pipeTo(con.writable);
+          proxy.write(buff);
+          con.readable.pipeTo(proxy.writable).then(then.bind(null,con,proxy)).catch(except.bind(null,con,proxy));
+          proxy.readable.pipeTo(con.writable).then(then.bind(null,con,proxy)).catch(except.bind(null,con,proxy));
 
-        this.#listener(this.#proxies[0][1],conn,"tcp",-1,con.remoteAddr);
+          this.#listener(this.#proxies[0][1],conn,"tcp",-1,con.remoteAddr);
+        }
       }
+    } catch(err){
+      ;
     }
   }
 
