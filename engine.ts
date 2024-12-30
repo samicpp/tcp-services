@@ -131,7 +131,7 @@ class Engine {
         }
       }
     } catch(err){
-      ;
+      this.#emit("error",err);
     }
   }
 

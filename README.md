@@ -27,3 +27,10 @@ Paths to directories dont need to start with `/` and files are allowed to end wi
 
 When an error occours it will use the error files located in SpecialURL.tardir+`/errors/`+status code.
 If it can't find an error file it wll send out a default response.
+
+### main.ts
+Imports engine.ts, http-server.ts and starts a server.
+You can configure this server with cli parameters.
+- `--http=PORT`: A port to listen on without tls. Can be used multiple times for multiple ports.
+- `--https=PORT`: A port to listen on with tls. Can also be used multiple times for multiple ports.
+- `--dyn=PORT`: A port to listen on with a proxy. The proxy will automatically upgrade the connection to tls if a tls connection was attempted to make (think tls over port 80). IP integrity remained meaning the original ip address is given without `127.0.0.1` like normally.

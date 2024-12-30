@@ -34,6 +34,15 @@ interface Engine {
      * @param port Optional. Port to start the server on. Defaults to `Engine.port` if not provided.
      */
     start(port?: number, tls?: TlsOptions): Promise<void>;
+    
+    /**
+     * Starts a proxy on the specified port. 
+     * The proxy does not interfere with the ip address unless it forwards to external services.
+     * Can be invoked multiple times.
+     * 
+     * @param port Port to start the proxy on.
+     */
+    proxy(port: number): Promise<void>;
 
     /**
      * Attaches an event listener for server events.
@@ -41,6 +50,7 @@ interface Engine {
      * Supported events:
      * - `connection`: Triggered when a new client connects. Provides a `HTTPSocket` instance.
      * - `null data`: Triggered when a new client doesn't send any data. Provides a `TcpConn` instance.
+     * - `error`: Triggered when an error was caught in a function. Provides an `Error` instance.
      * 
      * @param event The name of the event to listen for.
      * @param listener The callback function to invoke with event data.
