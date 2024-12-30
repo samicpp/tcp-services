@@ -1,0 +1,18 @@
+{
+    "url":"https://google.com/",
+    "response":{
+        "headers":{"test":"test"},
+        "status":200,
+        "replace":{
+            "Google":"Beagle",
+            "\\s":""
+        },
+        "proxied":false
+    },
+    "request":{
+        "headers":{},
+        "method":"POST",
+        "body":"hello world",
+        "proxied":true
+    }
+}

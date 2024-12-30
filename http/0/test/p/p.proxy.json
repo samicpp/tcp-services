@@ -1,0 +1,9 @@
+{
+    "url":"http://localhost/",
+    "response":{
+        "proxied":true
+    },
+    "request":{
+        "proxied":true
+    }
+}

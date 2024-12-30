@@ -1,12 +1,17 @@
 import mime from "./mime-types.json" with { type: "json" };
 import docs from "./docs.d.ts";
+import "jsr:@std/dotenv/load";
+import OpenAI from "https://deno.land/x/openai@v4.20.1/mod.ts";
+
   
 
 const AsyncFunction=(async function(){}).constructor;
 const te=new TextEncoder();
 const td=new TextDecoder();
-
+const secret=JSON.parse(Deno.readTextFileSync("D:\\secrets.json"));
+const openAI = new OpenAI({apiKey:secret["openai-key"]});
 const dyn={};
+const aid={};
 
 export async function listener({socket,client}: HttpSocket){
     let proxied=false;
@@ -160,11 +165,11 @@ export async function listener({socket,client}: HttpSocket){
         if(last.endsWith(".deno.ts")){
           console.log("importing deno thing",get);
           if(dyn[get]?.state&&dyn[get].state?.active){
-            dyn[get].mod.default(socket,url,get);
+            new Promise(r=>r(dyn[get].mod.default(socket,url,get))).catch(e=>console.error(e));
           } else {
             let mod=await import(get+"?d="+Date.now()); //anti chacheing
             //await new Promise(r=>r(mod.default(socket,url,get)));
-            mod.init(socket,url,get,()=>{dyn[get].state.active=false},dyn[get]);
+            new Promise(r=>r(mod.init(socket,url,get,()=>{dyn[get].state.active=false},dyn[get]))).catch(e=>console.error(e));
             dyn[get]={mod,state:{...mod.state}};
             dyn[get].state.active=true;
           }
@@ -180,6 +185,67 @@ export async function listener({socket,client}: HttpSocket){
           let r=await f(socket,url,get,opt,Deno);
           socket.setHeader("Content-Type",dct);
           socket.close(r);
+        }else if(last.endsWith(".proxy.json")){
+          console.log("proxying the connection");
+          let json=JSON.parse(td.decode(bytes));
+          let headers;
+          let method;
+          let body;
+          if(json.request.proxied){
+            headers=client.headers;
+            method=client.method;
+            body=client.data;
+          } else {
+            headers=json.request.headers||{};
+            method=json.request.method||{};
+            body=json.request.body||'';
+          };
+          console.log("proxying to "+json.url);
+          let res=await fetch(json.url,{method,headers,body:(method=="GET"||method=="HEAD"?undefined:body)});
+          let text=await res.clone().text();
+          if(json.response.proxied){
+            socket.status=res.status;
+            res.headers.forEach(([v,n])=>socket.setHeader(v,n));
+          } else {
+            socket.status=json.status||200;
+            let h=json.response.headers||{};
+            for(let i in h)socket.setHeader(i,h[i]);
+          };
+          let rtext=text;
+          if(json.response.replace){
+            let r=json.response.replace||{};
+            for(let i in r){
+              try{
+                let reg=new RegExp(i,"gs");
+                rtext=rtext.replaceAll(reg,r[i]);
+              } catch(err){
+                console.error(err);
+                rtext=rtext.replaceAll(i,r[i]);
+              }
+            }
+          };
+          socket.close(rtext);
+        }else if(last.endsWith(".link")){
+          console.log("following link to",td.decode(bytes));
+          handler(td.decode(bytes));
+        }else if(last.endsWith(".ai.json")){
+          console.log("using ai for content");
+          let ai=aid[get];
+          const json=JSON.parse(td.decode(bytes));
+          console.log("ai exist",!!ai);
+          if(!ai||ai.done){
+            const chatCompletion = await openAI.chat.completions.create({
+              messages: json.opt.messages,
+              model: json.opt.model,
+            });
+            ai=aid[get]={res:chatCompletion,json,done:false};
+          };
+          console.log("ai",ai);
+          for(let [k,v] of Object.entries(json.headers))socket.setHeader(k,v);
+          socket.close(ai.res.choices[0].message.content);
+          ai.json.cycle--;
+          console.log("ai done",ai.json.cycle<0,ai.done);
+          if(ai.json.cycle<0)ai.done=true;
         }else if(dct){
           console.log("sending as static file");
           socket.setHeader("Content-Type",dct);

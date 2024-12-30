@@ -17,7 +17,22 @@ async function handler(dest:number,ws:WebSocket,frame:WsFrame){
 
     else if(frame.opname=="text"){
         console.log("rchat.deno.ts got something");
-        let r=room[dest]?.sendText(frame.payload);
+        let str=td.decode(frame.payload);
+        let tar=room[dest];
+        console.log("rchat.deno.ts",str);
+        if(str[0]=="!"){
+            let cmd=str.split(" ")[0];
+            switch(cmd){
+                case"!bin":
+                    tar.sendBinary(str.replace("!bin ",""));
+                    return;
+                
+                case"!ping":
+                    tar.ping("ping");
+                    return;
+            }
+        }
+        let r=tar.sendText(frame.payload);
         console.log("rchat.deno.ts forward result",r);
     }
     else if(frame.opname=="close"&&!closing){

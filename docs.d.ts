@@ -102,7 +102,7 @@ interface HttpSocket {
      * A self-reference to this HTTPSocket instance for destructuring purposes.
      * Typically used in `{ socket, client }` patterns.
      */
-    readonly socket: HTTPSocket;
+    readonly socket: HttpSocket;
 
     /**
      * Metadata about the client making the request.

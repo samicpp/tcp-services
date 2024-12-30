@@ -1,0 +1,14 @@
+{
+    "opt":{
+        "_model": "gpt-4o-mini-2024-07-18",
+        "model":"gpt-4o-mini",
+        "messages":[
+            {"role":"system","content":"only respond in html, nothing else. No markdown snippets or anything. just directly the html. dont use external files or resources"},
+            {"role":"user","content":"make a website about google earth. try to make it dynamic. could you also try to use html5 canvas"}
+        ]
+    },
+    "cycle":10,
+    "headers":{
+        "Content-Type":"text/html"
+    }
+}
