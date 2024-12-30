@@ -34,3 +34,13 @@ You can configure this server with cli parameters.
 - `--http=PORT`: A port to listen on without tls. Can be used multiple times for multiple ports.
 - `--https=PORT`: A port to listen on with tls. Can also be used multiple times for multiple ports.
 - `--dyn=PORT`: A port to listen on with a proxy. The proxy will automatically upgrade the connection to tls if a tls connection was attempted to make (think tls over port 80). IP integrity remained meaning the original ip address is given without `127.0.0.1` like normally.
+
+#### Run examples
+```bash
+# Run tls and plain tcp on both port 80 and 443
+deno run --allow-read --allow-write --allow-net ./main.ts --dyn=80 --dyn=443
+
+
+# Standard server
+deno run --allow-read --allow-write --allow-net ./main.ts --http=80 --https=443
+```
