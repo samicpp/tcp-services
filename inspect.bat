@@ -1,0 +1,1 @@
+deno run --allow-read --allow-write --allow-net --inspect ./main.ts --dyn=80 --dyn=443

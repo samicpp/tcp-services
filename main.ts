@@ -64,7 +64,7 @@ let keys=Object.keys(Object.getOwnPropertyDescriptors(console));
 console.allow=true;
 wraploop:for(let p of keys){
     //console.log(p);
-    if(["indentLevel","assert"].includes(p)){continue wraploop}; // label not needed
+    if(typeof console[p]!="function"){continue wraploop}; // label not needed
     console["_"+p]=console[p];
     let f=console[p].bind(console);
     console[p]=async function(...args){
@@ -140,6 +140,12 @@ tcp.on("null data",e=>console.log("no data"));
 console.log('pid: ',deno.pid);
 await deno.writeTextFile("last-pid.txt", deno.pid);
 
+let lastBeat=Date.now();
+setInterval(()=>{
+    let t=Date.now();
+    console.log("keep alive",t-lastBeat);
+    lastBeat=t;
+},1*60*60*1000);
 
 /*
 ;(async e=>{
@@ -151,3 +157,5 @@ await deno.writeTextFile("last-pid.txt", deno.pid);
         };
     };
 })();// */
+
+console.log("main.ts finish",new Date());

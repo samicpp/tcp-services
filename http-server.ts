@@ -33,7 +33,7 @@ export async function listener({socket,client}: HttpSocket){
       get getStart(){return `./${this.defdir}/${this.tardir}`};
       ready: Promise<void>;
       constructor(...args: any[]){
-        super(args[0]);
+        super(args[0].replace("::","#"));
         let t=this;
         this.ready=async function(){
           const json = JSON.parse(await Deno.readTextFile(t.defdir+"/config.json"));
@@ -158,27 +158,30 @@ export async function listener({socket,client}: HttpSocket){
         let dct=mime[""+lext];
 
         if(last.endsWith(".deno.ts")){
-          //console.log("importing deno thing",get);
+          console.log("importing deno thing",get);
           if(dyn[get]?.state&&dyn[get].state?.active){
             dyn[get].mod.default(socket,url,get);
           } else {
             let mod=await import(get+"?d="+Date.now()); //anti chacheing
             //await new Promise(r=>r(mod.default(socket,url,get)));
-            mod.init(socket,url,get,()=>{dyn[get].active=false},dyn[get]);
+            mod.init(socket,url,get,()=>{dyn[get].state.active=false},dyn[get]);
             dyn[get]={mod,state:{...mod.state}};
             dyn[get].state.active=true;
           }
         }else if(last.endsWith(".async.js")){
+          console.log("executing js code");
           let t=td.decode(bytes);
-          let f=AsyncFunction("socket,url,get,opt",t);
-          f(socket,url,get,opt);
+          let f=AsyncFunction("socket,url,get,opt,deno",t);
+          f(socket,url,get,opt,Deno);
         }else if(/.*\.dyn\.[a-z]+/.test(last)&&dct){
+          console.log("parsing as js multiline string");
           let t=td.decode(bytes);
-          let f=AsyncFunction("socket,url,get,opt",`return \`${t.replaceAll("`","\\`")}\`;`);
-          let r=await f(socket,url,get,opt);
+          let f=AsyncFunction("socket,url,get,opt,deno",`return \`${t.replaceAll("`","\\`")}\`;`);
+          let r=await f(socket,url,get,opt,Deno);
           socket.setHeader("Content-Type",dct);
           socket.close(r);
         }else if(dct){
+          console.log("sending as static file");
           socket.setHeader("Content-Type",dct);
           socket.close(bytes);
           //socket.close();
@@ -199,7 +202,7 @@ export async function listener({socket,client}: HttpSocket){
       let stat;
       try{stat=await Deno.stat(get)}catch(err){console.error(err)};
       try{
-        if(!stat||get.endsWith(".ts")){
+        if(!stat){
           await e404(get);
         } else if(stat.isDirectory){
           await directory(get);

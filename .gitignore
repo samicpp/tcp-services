@@ -2,6 +2,7 @@
 http/70/*
 http/80/*
 http/443/*
+http/mc/*
 
 # dynamic files
 logcat.out
