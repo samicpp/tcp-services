@@ -15,7 +15,32 @@ const openAI = new OpenAI({apiKey:secret["openai-key"]});
 const dyn={};
 const aid={};
 const imports={openAI,canvas,OpenAI,ollama};
-const cache={};
+const caches:Record<string,{date:number,content:string,headers:Record<string,string>}>={};
+const fcaches:Record<string,{date:number,buffer:Uint8Array}>={};
+
+function cache(get,socket:HttpSocket){
+  let d=Date.now();
+  //console.log("looking for cache",caches[get]?.date<Date.now()-10000);
+  if(caches[get]&&caches[get].date>d-10_000){
+    for(let [k,v] of Object.entries(caches[get].headers))socket.setHeader(k,v);
+    socket.close(caches[get].content);
+    console.log("using caches for response");
+    return true;
+  } else return false;
+};
+async function readf(get){
+  let d=Date.now();
+  if(fcaches[get]&&fcaches[get].date>d-10_000){
+    console.log("caching file");
+    return fcaches[get].buffer;
+  } else {
+    const buffer = await Deno.readFile(get);
+    fcaches[get] = {date:d,buffer};
+    return buffer;
+  }
+};
+const readfText=g=>readf(g).then(b=>td.decode(b));
+
 
 export async function listener({socket,client}: HttpSocket){
     let proxied=false;
@@ -45,7 +70,7 @@ export async function listener({socket,client}: HttpSocket){
         super(args[0].replace("::","#"));
         let t=this;
         this.ready=async function(){
-          const json = JSON.parse(await Deno.readTextFile(t.defdir+"/config.json"));
+          const json = JSON.parse(await readfText(t.defdir+"/config.json"));
           
           let tar=json[t.host];
           let dtar=json.default
@@ -159,7 +184,9 @@ export async function listener({socket,client}: HttpSocket){
     };
     async function file(get:string,opt?:object): Promise<void>{
       try{
-        const bytes = await Deno.readFile(get);
+        if(cache(get,socket))return;
+
+        const bytes = await readf(get);
         let last=get.replace(/.*\//,"");
         console.log("file found",bytes.byteLength);
         let ext=last.split(".");
@@ -189,6 +216,7 @@ export async function listener({socket,client}: HttpSocket){
           let r=await f(socket,url,get,opt,Deno,imports);
           socket.setHeader("Content-Type",dct);
           socket.close(r);
+          //caches[get]={date:Date.now(),content:r,headers:socket.headers()};
         }else if(last.endsWith(".proxy.json")){
           console.log("proxying the connection");
           let json=JSON.parse(td.decode(bytes));
@@ -229,11 +257,13 @@ export async function listener({socket,client}: HttpSocket){
             }
           };
           socket.close(rtext);
+          caches[get]={date:Date.now(),content:rtext,headers:socket.headers()};
         }else if(last.endsWith(".link")){
           console.log("following link to",td.decode(bytes));
           handler(td.decode(bytes));
         }else if(last.endsWith(".ai.json")){
           console.log("using ai for content");
+          let rc="";
           let ai=aid[get];
           const json=JSON.parse(td.decode(bytes));
           console.log("ai exist",!!ai);
@@ -286,19 +316,21 @@ export async function listener({socket,client}: HttpSocket){
                 }
               }
             }
-            socket.close(c);
+            socket.close(rc=c);
             ai.json.cycle--;
             console.log("ai done",ai.json.cycle<0,ai.done);
             if(ai.json.cycle<0)ai.done=true;
           } else{
             socket.setHeader("Content-Type","text/plain");
-            socket.close(ai?.res?.stack+"");
+            socket.close(rc=ai?.res?.stack+"");
             ai.done=true;
           };
+          caches[get]={date:Date.now(),content:rc,headers:socket.headers()};
         }else if(dct){
           console.log("sending as static file");
           socket.setHeader("Content-Type",dct);
           socket.close(bytes);
+          caches[get]={date:Date.now(),content:bytes,headers:socket.headers()};
           //socket.close();
         }else{
           console.log("idk",last);

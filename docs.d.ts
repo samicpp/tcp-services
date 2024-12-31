@@ -115,6 +115,15 @@ interface HttpSocket {
     readonly isWebSocket: boolean;
 
     /**
+     * Indicates if the current connection is over tls or plain tcp.
+     * @value tcp Plain tcp.
+     * @value tcp::tls Tls over tcp.
+     */
+    readonly type: string;
+
+    
+
+    /**
      * HTTP response status code (e.g., 200 for success).
      */
     status: number;
@@ -145,6 +154,14 @@ interface HttpSocket {
     setHeader(name: string, value: string): boolean;
 
     /**
+     * Removes a single HTTP header from the response.
+     * 
+     * @param name The name of the header.
+     * @returns `true` if the header was successfully removed, `false` otherwise.
+     */
+    removeHeader(name: string): boolean;
+
+    /**
      * Sets multiple HTTP headers and optionally the status code and message.
      * 
      * @param status Optional. HTTP status code.
@@ -153,6 +170,11 @@ interface HttpSocket {
      * @returns `true` if headers were successfully set, `false` otherwise.
      */
     writeHead(status?: number, statusMessage?: string, headers?: object): boolean;
+
+    /**
+     * Returns all headers as an object
+     */
+    headers(): Record<string,string>;
 
     /**
      * Sends a plain text response to the client and finalizes the headers.

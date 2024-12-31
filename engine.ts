@@ -305,6 +305,12 @@ class Engine {
       this.#headers[a] = b;
       return true;
     }
+    removeHeader(a: string): boolean{
+      if(this.#isWebsocket)return false;
+      if (this.#headersSent == true) return false;
+      if(this.#headers[a]) return delete this.#headers[a];
+      return false;
+    }
     writeHead(status?: number, statusMessage?: string, headers?: object): void {
       if(this.#isWebsocket)return;
       if (status) this.status = status;
@@ -312,6 +318,7 @@ class Engine {
       if (headers) { for (let i in headers) this.#headers[i] = headers[i]; }
       //return this.#sendHeaders();
     }
+    headers(): Record<string,string>{ return {...this.#headers}; }
     async #writeChunk(buf:ArrayBuffer): Promise<void>{
       await this.#writeTcp(this.#te.encode(buf.byteLength.toString(16)+"\r\n"));
       await this.#writeTcp(buf);

@@ -6,7 +6,7 @@ export default async function(socket, url, get){
     visits++;
     if(visits>5)del();
 }
-export async function init(socket, url, get, dele){
+export async function init(socket, url, get, dele, self, imports){
     del=dele
     await socket.writeText("hello");
     socket.close(); 
