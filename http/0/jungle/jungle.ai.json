@@ -1,0 +1,17 @@
+{
+    "type":"ollama",
+    "opt":{
+        "model":"llama3.2",
+        "messages":[
+            {"role":"system","content":"your response is gonna be displayed on a website. respond in html"},
+            {"role":"user","content":"explain that this subpage has very very dynamicly generated content. subpages are `/jungle/vdyn` and `/jungle/portfolio`"}
+        ]
+    },
+    "replace":{
+        "^.*?(<html>|<html lang=\"en\">)|<\/html>.*$":""
+    },
+    "cycle":10,
+    "headers":{
+        "Content-Type":"text/html"
+    }
+}

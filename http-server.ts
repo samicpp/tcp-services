@@ -15,6 +15,7 @@ const openAI = new OpenAI({apiKey:secret["openai-key"]});
 const dyn={};
 const aid={};
 const imports={openAI,canvas,OpenAI,ollama};
+const cache={};
 
 export async function listener({socket,client}: HttpSocket){
     let proxied=false;
