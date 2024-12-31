@@ -1,5 +1,6 @@
-import { createCanvas } from "https://deno.land/x/canvas/mod.ts";
+//import { createCanvas } from "https://deno.land/x/canvas/mod.ts";
 
+let createCanvas;
 let del:Function;
 let visits=0;
 let maxvisits=3;
@@ -44,7 +45,9 @@ export default async function(socket, url, get){
     visits++;
     if(visits>maxvisits)del();
 }
-export async function init(socket, url, get, dele){
+export async function init(socket, url, get, dele,self,imports){
     del=dele;
     await main(socket).catch(e=>e);
+    createCanvas=imports.canvas.createCanvas;
+    console.log("canvas.deno.ts",createCanvas);
 }

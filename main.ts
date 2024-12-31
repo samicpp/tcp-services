@@ -136,6 +136,7 @@ tcp.intTlsOpt=tlsopt;
 for(let dport of dports)tcp.proxy(parseInt(dport));
 tcp.on("connect",http.listener);
 tcp.on("null data",e=>console.log("no data"));
+tcp.on("error",e=>console.error(e));
 
 console.log('pid: ',deno.pid);
 await deno.writeTextFile("last-pid.txt", deno.pid);

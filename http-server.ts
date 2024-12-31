@@ -2,6 +2,8 @@ import mime from "./mime-types.json" with { type: "json" };
 import docs from "./docs.d.ts";
 import "jsr:@std/dotenv/load";
 import OpenAI from "https://deno.land/x/openai@v4.20.1/mod.ts";
+import * as canvas from "https://deno.land/x/canvas/mod.ts";
+import ollama from 'npm:ollama';
 
   
 
@@ -12,6 +14,7 @@ const secret=JSON.parse(Deno.readTextFileSync("D:\\secrets.json"));
 const openAI = new OpenAI({apiKey:secret["openai-key"]});
 const dyn={};
 const aid={};
+const imports={openAI,canvas,OpenAI,ollama};
 
 export async function listener({socket,client}: HttpSocket){
     let proxied=false;
@@ -169,20 +172,20 @@ export async function listener({socket,client}: HttpSocket){
           } else {
             let mod=await import(get+"?d="+Date.now()); //anti chacheing
             //await new Promise(r=>r(mod.default(socket,url,get)));
-            new Promise(r=>r(mod.init(socket,url,get,()=>{dyn[get].state.active=false},dyn[get]))).catch(e=>console.error(e));
             dyn[get]={mod,state:{...mod.state}};
             dyn[get].state.active=true;
+            new Promise(r=>r(mod.init(socket,url,get,()=>{dyn[get].state.active=false},dyn[get],imports))).catch(e=>{console.error(e);dyn[get].state.active=false});
           }
         }else if(last.endsWith(".async.js")){
           console.log("executing js code");
           let t=td.decode(bytes);
-          let f=AsyncFunction("socket,url,get,opt,deno",t);
-          f(socket,url,get,opt,Deno);
+          let f=AsyncFunction("socket,url,get,opt,deno,imports",t);
+          f(socket,url,get,opt,Deno,imports);
         }else if(/.*\.dyn\.[a-z]+/.test(last)&&dct){
           console.log("parsing as js multiline string");
           let t=td.decode(bytes);
-          let f=AsyncFunction("socket,url,get,opt,deno",`return \`${t.replaceAll("`","\\`")}\`;`);
-          let r=await f(socket,url,get,opt,Deno);
+          let f=AsyncFunction("socket,url,get,opt,deno,imports",`return \`${t.replaceAll("`","\\`")}\`;`);
+          let r=await f(socket,url,get,opt,Deno,imports);
           socket.setHeader("Content-Type",dct);
           socket.close(r);
         }else if(last.endsWith(".proxy.json")){
@@ -234,18 +237,45 @@ export async function listener({socket,client}: HttpSocket){
           const json=JSON.parse(td.decode(bytes));
           console.log("ai exist",!!ai);
           if(!ai||ai.done){
-            const chatCompletion = await openAI.chat.completions.create({
-              messages: json.opt.messages,
-              model: json.opt.model,
-            });
-            ai=aid[get]={res:chatCompletion,json,done:false};
+            if(json.type=="openai"){
+              const chatCompletion = await openAI.chat.completions.create({
+                messages: json.opt.messages,
+                model: json.opt.model,
+              }).catch(e=>e);
+              ai=aid[get]={res:chatCompletion,json,done:false,content:chatCompletion.choices[0].message.content};
+            }else if(json.type=="ollama"){
+              const chat = await ollama.chat({
+                model: json.opt.model,
+                messages: json.opt.messages,
+              }).catch(e=>e);
+              ai=aid[get]={res:chat,json,done:false,content:chat.message.content};
+            };
           };
           console.log("ai",ai);
-          for(let [k,v] of Object.entries(json.headers))socket.setHeader(k,v);
-          socket.close(ai.res.choices[0].message.content);
-          ai.json.cycle--;
-          console.log("ai done",ai.json.cycle<0,ai.done);
-          if(ai.json.cycle<0)ai.done=true;
+          if(ai&&!ai.res.stack){
+            for(let [k,v] of Object.entries(json.headers))socket.setHeader(k,v);
+            let c=ai.content;
+            let r=json.replace;
+            if(json.replace){
+              for(let i in r){
+                try{
+                  let reg=new RegExp(i,"gs");
+                  c=c.replaceAll(reg,r[i]);
+                } catch(err){
+                  console.error(err);
+                  c=c.replaceAll(i,r[i]);
+                }
+              }
+            }
+            socket.close(c);
+            ai.json.cycle--;
+            console.log("ai done",ai.json.cycle<0,ai.done);
+            if(ai.json.cycle<0)ai.done=true;
+          } else{
+            socket.setHeader("Content-Type","text/plain");
+            socket.close(ai?.res?.stack+"");
+            ai.done=true;
+          };
         }else if(dct){
           console.log("sending as static file");
           socket.setHeader("Content-Type",dct);

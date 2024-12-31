@@ -1,0 +1,20 @@
+{
+    "type":"openai",
+    "opt": {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": "only respond in html, nothing else. No markdown snippets or anything. just directly the html. do not use external files or resources. Ensure the output includes inline CSS for styling."
+            },
+            {
+                "role": "user",
+                "content": "Create a dynamic portfolio website with sections for 'About Me', 'Projects', 'Skills', and 'Contact'. Use HTML5 canvas to create a moving particle background effect on the homepage."
+            }
+        ]
+    },
+    "cycle": 10,
+    "headers": {
+        "Content-Type": "text/html"
+    }
+}
