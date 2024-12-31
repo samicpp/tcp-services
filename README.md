@@ -15,8 +15,11 @@ Responsible for handling the HTTP (or WebSocket) connections starting from the T
 ### http-server.ts
 Dynamic files:
 - `*.dyn.*`: Execute it as a multi line string with parameters Engine.HttpSocket, SpecialURL, the file location as a string. Content type is the same as the file extension
-- `*.mod.ts`: Imports the file, stores the module and invokes `default` with Engine.HttpSocket, SpecialURL, the file location as a string.
+- `*.mod.ts`: Imports the file, stores the module and first invokes `init` and later invokes `default` with Engine.HttpSocket, SpecialURL, the file location as a string.
 - `*.async.js`: Turns the file into an async function and invokes it with Engine.HttpSocket, SpecialURL, the file location as a string.
+- `*.link`: Contains the path of another file which will be processed as if it were the original file.
+- `*.proxy.json`: Parses the json file and will fetch the destination and show that to the client.
+- `*.ai.json`: Uses ai to generate a response.
 
 #### Behaviour
 If the path is a directory it will look for `index.*` or will look for a file that starts with the name of its parent directory.
@@ -27,6 +30,8 @@ Paths to directories dont need to start with `/` and files are allowed to end wi
 
 When an error occours it will use the error files located in SpecialURL.tardir+`/errors/`+status code.
 If it can't find an error file it wll send out a default response.
+
+Will cache certain responses and all files. Customizable with the variable `cacheTIme` with miliseconds in `http-server.ts:20:23`.
 
 ### main.ts
 Imports engine.ts, http-server.ts and starts a server.

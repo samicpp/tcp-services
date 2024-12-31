@@ -17,11 +17,12 @@ const aid={};
 const imports={openAI,canvas,OpenAI,ollama};
 const caches:Record<string,{date:number,content:string,headers:Record<string,string>}>={};
 const fcaches:Record<string,{date:number,buffer:Uint8Array}>={};
+const cacheTime:number=10_000;
 
 function cache(get,socket:HttpSocket){
   let d=Date.now();
-  //console.log("looking for cache",caches[get]?.date<Date.now()-10000);
-  if(caches[get]&&caches[get].date>d-10_000){
+  //console.log("looking for cache",caches[get]?.date<Date.now()-cacheTime);
+  if(caches[get]&&caches[get].date>d-cacheTime){
     for(let [k,v] of Object.entries(caches[get].headers))socket.setHeader(k,v);
     socket.close(caches[get].content);
     console.log("using caches for response");
@@ -30,7 +31,7 @@ function cache(get,socket:HttpSocket){
 };
 async function readf(get){
   let d=Date.now();
-  if(fcaches[get]&&fcaches[get].date>d-10_000){
+  if(fcaches[get]&&fcaches[get].date>d-cacheTime){
     console.log("caching file");
     return fcaches[get].buffer;
   } else {
