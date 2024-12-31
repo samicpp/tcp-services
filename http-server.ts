@@ -3,7 +3,9 @@ import docs from "./docs.d.ts";
 import "jsr:@std/dotenv/load";
 import OpenAI from "https://deno.land/x/openai@v4.20.1/mod.ts";
 import * as canvas from "https://deno.land/x/canvas/mod.ts";
-import ollama from 'npm:ollama';
+import ollama from "npm:ollama";
+import * as pdflib from "https://cdn.skypack.dev/pdf-lib@^1.11.1?dts";
+import * as pug from "https://deno.land/x/pug/mod.ts";
 
   
 
@@ -14,8 +16,8 @@ const secret=JSON.parse(Deno.readTextFileSync("D:\\secrets.json"));
 const openAI = new OpenAI({apiKey:secret["openai-key"]});
 const dyn={};
 const aid={};
-const imports={openAI,canvas,OpenAI,ollama};
-const caches:Record<string,{date:number,content:string,headers:Record<string,string>}>={};
+const imports={openAI,canvas,OpenAI,ollama,pdflib,pug};
+const caches:Record<string,{date:number,content:string|Uint8Array,headers:Record<string,string>}>={};
 const fcaches:Record<string,{date:number,buffer:Uint8Array}>={};
 const cacheTime:number=10_000;
 
@@ -193,9 +195,16 @@ export async function listener({socket,client}: HttpSocket){
         let ext=last.split(".");
         let lext=ext[ext.length-1];
         let dct=mime[""+lext];
+        let dynamic=false;
+        let isJss=/.*\.dyn\.[a-z]+/.test(last);
+
+        async function jss(content){
+          return await AsyncFunction("socket,url,get,opt,deno,imports",`return \`${content.replaceAll("`","\\`")}\`;`)(socket,url,get,opt,Deno,imports);
+        }
 
         if(last.endsWith(".deno.ts")){
           console.log("importing deno thing",get);
+          dynamic=true;
           if(dyn[get]?.state&&dyn[get].state?.active){
             new Promise(r=>r(dyn[get].mod.default(socket,url,get))).catch(e=>console.error(e));
           } else {
@@ -204,19 +213,29 @@ export async function listener({socket,client}: HttpSocket){
             dyn[get]={mod,state:{...mod.state}};
             dyn[get].state.active=true;
             new Promise(r=>r(mod.init(socket,url,get,()=>{dyn[get].state.active=false},dyn[get],imports))).catch(e=>{console.error(e);dyn[get].state.active=false});
-          }
+          };
         }else if(last.endsWith(".async.js")){
           console.log("executing js code");
+          dynamic=true;
           let t=td.decode(bytes);
           let f=AsyncFunction("socket,url,get,opt,deno,imports",t);
           f(socket,url,get,opt,Deno,imports);
-        }else if(/.*\.dyn\.[a-z]+/.test(last)&&dct){
+        }else if(last.endsWith(".pug")){
+          console.log("compiling pug file")
+          let t=td.decode(bytes);
+          if(isJss){
+            console.log("also executing as js multiline string");
+            t=await jss(t);
+          };
+          let h=pug.compile(t);
+          socket.setHeader("Content-Type","text/html");
+          await socket.close(h);
+        }else if(isJss&&dct){
           console.log("parsing as js multiline string");
           let t=td.decode(bytes);
-          let f=AsyncFunction("socket,url,get,opt,deno,imports",`return \`${t.replaceAll("`","\\`")}\`;`);
-          let r=await f(socket,url,get,opt,Deno,imports);
+          let r=await jss(t);
           socket.setHeader("Content-Type",dct);
-          socket.close(r);
+          await socket.close(r);
           //caches[get]={date:Date.now(),content:r,headers:socket.headers()};
         }else if(last.endsWith(".proxy.json")){
           console.log("proxying the connection");
@@ -257,14 +276,13 @@ export async function listener({socket,client}: HttpSocket){
               }
             }
           };
-          socket.close(rtext);
-          caches[get]={date:Date.now(),content:rtext,headers:socket.headers()};
+          await socket.close(rtext);
+          //caches[get]={date:Date.now(),content:rtext,headers:socket.headers()};
         }else if(last.endsWith(".link")){
           console.log("following link to",td.decode(bytes));
-          handler(td.decode(bytes));
+          await handler(td.decode(bytes));
         }else if(last.endsWith(".ai.json")){
           console.log("using ai for content");
-          let rc="";
           let ai=aid[get];
           const json=JSON.parse(td.decode(bytes));
           console.log("ai exist",!!ai);
@@ -317,28 +335,30 @@ export async function listener({socket,client}: HttpSocket){
                 }
               }
             }
-            socket.close(rc=c);
             ai.json.cycle--;
             console.log("ai done",ai.json.cycle<0,ai.done);
             if(ai.json.cycle<0)ai.done=true;
+            await socket.close(c);
           } else{
             socket.setHeader("Content-Type","text/plain");
-            socket.close(rc=ai?.res?.stack+"");
             ai.done=true;
+            await socket.close(ai?.res?.stack+"");
           };
-          caches[get]={date:Date.now(),content:rc,headers:socket.headers()};
+          //caches[get]={date:Date.now(),content:rc,headers:socket.headers()};
         }else if(dct){
-          console.log("sending as static file");
+          console.log("using as static file");
           socket.setHeader("Content-Type",dct);
-          socket.close(bytes);
-          caches[get]={date:Date.now(),content:bytes,headers:socket.headers()};
-          //socket.close();
+          await socket.close(bytes);
+          //caches[get]={date:Date.now(),content:bytes,headers:socket.headers()};
         }else{
-          console.log("idk",last);
-          socket.status=204;
-          socket.close();
-        }
+          console.log("idk what this is. sending as html file",last);
+          await socket.close(bytes);
+        };
 
+        if(!dynamic){
+          console.log(socket.written().length);
+          caches[get]={date:Date.now(),content:socket.written(),headers:socket.headers()};
+        };
         //await socket.writeBuffer(bytes);
         //socket.close();
       }  catch (err){

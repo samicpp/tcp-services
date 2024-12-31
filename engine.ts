@@ -181,6 +181,7 @@ class Engine {
     #td; #te; #data;
     #server; #type;
 
+    #closed=false;
     #isWebsocket=false;
 
     
@@ -313,12 +314,14 @@ class Engine {
     }
     writeHead(status?: number, statusMessage?: string, headers?: object): void {
       if(this.#isWebsocket)return;
+      if (this.#headersSent == true) return;
       if (status) this.status = status;
       if (statusMessage) this.statusMessage = statusMessage;
       if (headers) { for (let i in headers) this.#headers[i] = headers[i]; }
       //return this.#sendHeaders();
     }
     headers(): Record<string,string>{ return {...this.#headers}; }
+    #written:number[]=[];
     async #writeChunk(buf:ArrayBuffer): Promise<void>{
       await this.#writeTcp(this.#te.encode(buf.byteLength.toString(16)+"\r\n"));
       await this.#writeTcp(buf);
@@ -326,63 +329,75 @@ class Engine {
     }
     async writeText(text: string): Promise<void> {
       if(this.#isWebsocket)return;
+      if(this.#closed)return;
       this.setHeader("Transfer-Encoding","chunked");
       let b=this.#te.encode(text);
+      let w=b;
+      this.#written.push(...b);
       if(this.compress){
         try{
-          if(this.encoding=="gzip")b=compress.gzip(b);
+          if(this.encoding=="gzip")w=compress.gzip(b);
           this.setHeader("Content-Encoding", "gzip");
         } catch(err){
           ;
         };
       }
-      await this.#sendHeaders(text.length);
-      await this.#writeChunk(b);
+      await this.#sendHeaders(w.length);
+      await this.#writeChunk(w);
     }
-    async writeBuffer(buffer: ArrayBuffer): Promise<void> {
+    async writeBuffer(buffer: Uint8Array): Promise<void> {
       if(this.#isWebsocket)return;
+      if(this.#closed)return;
       this.setHeader("Transfer-Encoding","chunked");
       let b=buffer;
+      let w=b;
+      this.#written.push(...b);
       if(this.compress){
         try{
-          if(this.encoding=="gzip")b=compress.gzip(b);
+          if(this.encoding=="gzip")w=compress.gzip(b);
           this.setHeader("Content-Encoding", "gzip");
         } catch(err){
           ;
         };
       }
-      await this.#sendHeaders(buffer.byteLength);
-      await this.#writeChunk(b);
+      await this.#sendHeaders(w.byteLength);
+      await this.#writeChunk(w);
     }
     async close(data?: string | ArrayBuffer): Promise<void> {
       if(this.#isWebsocket)return;
+      if(this.#closed)return;
       //await this.#sendHeaders(0);
+      let b=data;
+      if (typeof data == "string")b=this.#te.encode(data);
+      //if (typeof data != "object")b=new Uint8Array();
       if(this.#headersSent){
-        if (typeof data == "string") await this.writeText(data);
-        if (typeof data == "object") await this.writeBuffer(data);
+        if (b) await this.writeBuffer(b);
         await this.#writeTcp(this.#te.encode("0\r\n\r\n"));
       } else {
-        let b=data;
-        if (typeof data == "string") b=this.#te.encode(data);
+        let w=b;
         if(this.compress){
           try{
-            if(this.encoding=="gzip")b=compress.gzip(b);
+            if(this.encoding=="gzip")w=compress.gzip(b);
             this.setHeader("Content-Encoding", "gzip");
           } catch(err){
             ;
           };
         };
-        this.#headers["Content-Length"]=b.byteLength.toString();
+        this.#headers["Content-Length"]=w.byteLength.toString();
         const head=this.#te.encode(this.#headerString());
-        const pack=new Uint8Array(head.byteLength+b.byteLength);
+        const pack=new Uint8Array(head.byteLength+w.byteLength);
         pack.set(head);
-        pack.set(b,head.byteLength);
+        pack.set(w,head.byteLength);
         
         await this.#writeTcp(pack);
       }
+      if(b)this.#written.push(...b);
+      this.#headersSent=true;
       this.#tcp.close();
+      this.#closed=true;
     }
-    deny(){if(!this.#isWebsocket)this.#tcp.close()}
+    written(): Uint8Array{ return new Uint8Array(this.#written); }
+    deny():void{if(!this.#isWebsocket)this.#tcp.close();}
 
     #ws:WebSocket;
     async websocket():Promise<WebSocket|null>{

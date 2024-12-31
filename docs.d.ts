@@ -198,6 +198,11 @@ interface HttpSocket {
     close(data?: ArrayBuffer | string): Promise<void>;
 
     /**
+     * Returns the written response body as buffer.
+     */
+    written(): Uint8Array;
+
+    /**
      * Immediately terminates the connection without sending additional data.
      * This is equivalent to forcefully dropping the TCP connection.
      */
