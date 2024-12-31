@@ -237,21 +237,39 @@ export async function listener({socket,client}: HttpSocket){
           const json=JSON.parse(td.decode(bytes));
           console.log("ai exist",!!ai);
           if(!ai||ai.done){
+            ai=aid[get]={};
             if(json.type=="openai"){
-              const chatCompletion = await openAI.chat.completions.create({
+              const pro = openAI.chat.completions.create({
                 messages: json.opt.messages,
                 model: json.opt.model,
               }).catch(e=>e);
-              ai=aid[get]={res:chatCompletion,json,done:false,content:chatCompletion.choices[0].message.content};
+              ai.done=false;
+              ai.ready=false;
+              ai.pro=pro;
+              const chat=await pro;
+              ai.res=chat;
+              ai.json=json;
+              ai.ready=true;
+              ai.content=chat.choices[0].message.content;
+              //ai=aid[get]={res:chat,json,done:false,content:chat.choices[0].message.content};
             }else if(json.type=="ollama"){
-              const chat = await ollama.chat({
+              const pro = ollama.chat({
                 model: json.opt.model,
                 messages: json.opt.messages,
               }).catch(e=>e);
-              ai=aid[get]={res:chat,json,done:false,content:chat.message.content};
+              ai.done=false;
+              ai.ready=false;
+              ai.pro=pro;
+              const chat=await pro;
+              ai.res=chat;
+              ai.json=json;
+              ai.ready=true;
+              ai.content=chat.message.content;
+              //ai=aid[get]={res:chat,json,done:false,content:chat.message.content};
             };
           };
           console.log("ai",ai);
+          if(!ai.ready)await ai.pro;
           if(ai&&!ai.res.stack){
             for(let [k,v] of Object.entries(json.headers))socket.setHeader(k,v);
             let c=ai.content;

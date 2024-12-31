@@ -6,7 +6,7 @@
         "model":"llama3.2",
         "messages":[
             {"role":"system","content":"only respond in html, nothing else. No markdown snippets or anything. just directly the html. dont use external files or resources"},
-            {"role":"user","content":"make a website about google earth. try to make it dynamic. could you also try to use html5 canvas"}
+            {"role":"user","content":"make a website about anything you want. try to make it dynamic. its gonna be directly served as is."}
         ]
     },
     "replace":{
