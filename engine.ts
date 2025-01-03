@@ -368,8 +368,8 @@ class Engine {
       if(this.#closed)return;
       //await this.#sendHeaders(0);
       let b=data;
-      if (typeof data == "string")b=this.#te.encode(data);
-      //if (typeof data != "object")b=new Uint8Array();
+      if (typeof b == "string")b=this.#te.encode(data);
+      if (typeof b != "object")b=new Uint8Array();
       if(this.#headersSent){
         if (b) await this.writeBuffer(b);
         await this.#writeTcp(this.#te.encode("0\r\n\r\n"));
