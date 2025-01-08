@@ -24,7 +24,7 @@ Dynamic files:
 #### Behaviour
 If the path is a directory it will look for `index.*` or will look for a file that starts with the name of its parent directory.
 
-The server will read and parse `config.json` everytime when a request happens and will look up which directory it needs to look in based of the hostname and port and will then add the result to `./http/` and read the file starting form that directory. This is stored in SPecialURL.tardir.
+The server will read and parse `config.json` everytime when a request happens and will look up which directory it needs to look in based of the hostname and port and will then add the result to `./http/` and read the file starting form that directory. This is stored in SpecialURL.tardir. Optionably can also use a router file.
 
 Paths to directories dont need to start with `/` and files are allowed to end with `/`.
 
@@ -32,6 +32,19 @@ When an error occours it will use the error files located in SpecialURL.tardir+`
 If it can't find an error file it wll send out a default response.
 
 Will cache certain responses and all files. Customizable with the variable `cacheTIme` with miliseconds in `http-server.ts:20:23`.
+
+##### config.json
+In here you can route certain hosts to certain directories. E.g. upgrade http connections to https.
+
+In config.json a property is read based of this format: `protocol(commonly http or https)://hostname:port(if applicable. think of defualt port like 80 and 443)`.
+The value of said property is another json object with 2 properties, where's the second one not mandatory
+- `dir`: Specify the directory which will be looked in. Is a string.
+- `router`: Specify the filename of the router. Is a string and optionable.
+
+##### Router files
+These type of files will be used regardless of the pathname. Can be used for sites independent of the page.
+
+If said file is a dynamic file (think of `.deno.ts` or `.async.js`) you could continue the connection like normal. The additional parameter `opt` will contain things like the original path to get files, all error handlers, file handler, directory handler and default handler.
 
 ### main.ts
 Imports engine.ts, http-server.ts and starts a server.
