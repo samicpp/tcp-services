@@ -66,11 +66,16 @@ export async function listener({socket,client}: HttpSocket){
     //await socket.writeText(client.method+" request at "+client.path);
     //socket.close("\r\n");
 
+    async function exists(get){
+      return await Deno.stat(get).catch(e=>null);
+    };
+
     console.log("socket client isValid",socket.client.isValid);
     let url;
     class SpecialURL extends URL{
       defdir="http";
       tardir="0";
+      router;
       get getStart(){return `./${this.defdir}/${this.tardir}`};
       ready: Promise<void>;
       constructor(...args: any[]){
@@ -80,10 +85,18 @@ export async function listener({socket,client}: HttpSocket){
           const json = JSON.parse(await readfText(t.defdir+"/config.json"));
           
           let tar=json[t.origin];
-          let dtar=json.default
+          let dtar=json.default;
+          let utar=tar||dtar;
 
-          t.tardir=tar.dir||dtar.dir
-        }();
+          console.log("utar",utar);
+          t.tardir=utar.dir;
+          let rstat=await exists(`${t.defdir}/${utar.dir}/${utar.router}`);
+
+          if(rstat){
+            t.router=utar.router;
+            console.log("router present",t.router);
+          };
+        }().catch(e=>e);
       }
     };
     try{url=new SpecialURL(`${proxied?client.headers["x-scheme"]:(socket.type=="tcp::tls"?"https":"http")}://${proxied?client.headers["x-forwarded-host"]:client.headers.host}${client.path}`);}catch(err){console.error(err);isValid=false};
@@ -92,16 +105,6 @@ export async function listener({socket,client}: HttpSocket){
     console.log(url.toString());
     console.log(client.address)
     
-    async function exists(get){
-      let ret;
-      try{
-        ret=await Deno.stat(get);
-      }catch(err){
-        //console.error(err)
-        ret=null;
-      };
-      return ret;
-    };
 
     async function e403(get:string,err:Error){
       let eget=url.getStart+"/errors/403.dyn.html";
@@ -192,7 +195,7 @@ export async function listener({socket,client}: HttpSocket){
 
         };
 
-        if(!match.isFile){
+        if(!match?.isFile){
           console.log("cant find file",dirs);
           return e409(get);
         } else {
@@ -215,7 +218,7 @@ export async function listener({socket,client}: HttpSocket){
         let isJss=/.*\.dyn\.[a-z]+/.test(last);
         let stop=false;
 
-        async function jss(content){
+        async function jss(content,opt?){
           return await AsyncFunction("socket,url,get,opt,deno,imports",`return \`${content.replaceAll("`","\\`")}\`;`)(socket,url,get,opt,Deno,imports);
         }
 
@@ -233,13 +236,13 @@ export async function listener({socket,client}: HttpSocket){
           console.log("importing deno thing",get);
           dynamic=true;
           if(dyn[get]?.state&&dyn[get].state?.active){
-            new Promise(r=>r(dyn[get].mod.default(socket,url,get))).catch(e=>console.error(e));
+            new Promise(r=>r(dyn[get].mod.default(socket,url,get,opt))).catch(e=>console.error(e));
           } else {
             let mod=await import(get+"?d="+Date.now()); //anti chacheing
             //await new Promise(r=>r(mod.default(socket,url,get)));
             dyn[get]={mod,state:{...mod.state}};
             dyn[get].state.active=true;
-            new Promise(r=>r(mod.init(socket,url,get,()=>{dyn[get].state.active=false},dyn[get],imports))).catch(e=>{console.error(e);dyn[get].state.active=false});
+            new Promise(r=>r(mod.init(socket,url,get,opt,()=>{dyn[get].state.active=false},dyn[get],imports))).catch(e=>{console.error(e);dyn[get].state.active=false});
           };
         }else if(last.endsWith(".async.js")){
           console.log("executing js code");
@@ -252,7 +255,7 @@ export async function listener({socket,client}: HttpSocket){
           let t=td.decode(bytes);
           if(isJss){
             console.log("also executing as js multiline string");
-            t=await jss(t);
+            t=await jss(t,opt);
           };
           let h=pug.compile(t);
           socket.setHeader("Content-Type","text/html");
@@ -260,7 +263,7 @@ export async function listener({socket,client}: HttpSocket){
         }else if(isJss&&dct){
           console.log("parsing as js multiline string");
           let t=td.decode(bytes);
-          let r=await jss(t);
+          let r=await jss(t,opt);
           socket.setHeader("Content-Type",dct);
           await socket.close(r);
           //caches[get]={date:Date.now(),content:r,headers:socket.headers()};
@@ -393,7 +396,7 @@ export async function listener({socket,client}: HttpSocket){
       }
     }
 
-    async function handler(get){
+    async function handler(get,opt?){
       let stat;
       try{stat=await Deno.stat(get)}catch(err){console.error(err)};
       try{
@@ -402,7 +405,7 @@ export async function listener({socket,client}: HttpSocket){
         } else if(stat.isDirectory){
           await directory(get);
         } else if(stat.isFile){
-          await file(get);
+          await file(get,opt);
         }
         return null;
       } catch(err){
@@ -417,14 +420,17 @@ export async function listener({socket,client}: HttpSocket){
 
     
 
-    await url.ready;
+    let r=await url.ready;
+    if(r?.stack)console.error(r);
     if(isValid){
       let get=`./${url.defdir}/${url.tardir}/${url.pathname.replaceAll(/\.+/g, ".").replaceAll(/\.\//g, "/").replace(/\/$/, "")}`;
       get=get.replaceAll(/\/+/g,"/").replace(/\/+$/,"");
+      let rget=`./${url.defdir}/${url.tardir}/${url.router}`;
       console.log("get",get);
+      console.log("rget",rget);
       
-      
-      await handler(get);
+      if(url.router)await handler(rget,{handler,file,directory,get,e400,e403,e404,e409,e500});
+      else await handler(get);
     } else {
       e400();
     }

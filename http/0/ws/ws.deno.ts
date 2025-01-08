@@ -39,11 +39,11 @@ function handler(frame:WsFrame){
     }
 }
 
-export default async function(socket: HttpSocket, url, get){
+export default async function(socket: HttpSocket, url, get, opt){
     socket.close(); 
     del();
 }
-export async function init(socket: HttpSocket, url: URL, get: string, dele: ()=> void, past: any|void){
+export async function init(socket: HttpSocket, url: URL, get: string, opt, dele: ()=> void, past: any|void){
     del=dele;
     const {client}=socket;
     console.log("ws.deno.ts",socket.client);

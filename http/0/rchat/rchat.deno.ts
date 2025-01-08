@@ -51,7 +51,7 @@ async function handler(dest:number,ws:WebSocket,frame:WsFrame){
     }
 }
 
-export default async function(socket: HttpSocket, url, get){
+export default async function(socket: HttpSocket, url, get, opt){
     const {client}=socket;
     console.log("rchat.deno.ts",1);
 
@@ -74,7 +74,7 @@ export default async function(socket: HttpSocket, url, get){
         socket.close(); 
     }
 }
-export async function init(socket: HttpSocket, url: URL, get: string, dele: ()=> void, past: any|void){
+export async function init(socket: HttpSocket, url: URL, get: string, opt, dele: ()=> void, past: any|void){
     del=dele;
     const {client}=socket;
     console.log("rchat.deno.ts",0);

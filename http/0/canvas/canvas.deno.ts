@@ -40,12 +40,12 @@ async function main(socket:HttpSocket){
     console.log("canvas.deno.ts Image generated",imageBuffer.length);
 
 }
-export default async function(socket, url, get){
+export default async function(socket, url, get, opt){
     await main(socket).catch(e=>e);
     visits++;
     if(visits>maxvisits)del();
 }
-export async function init(socket, url, get, dele,self,imports){
+export async function init(socket, url, get, opt, dele,self,imports){
     del=dele;
     await main(socket).catch(e=>e);
     createCanvas=imports.canvas.createCanvas;
