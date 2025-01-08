@@ -7,8 +7,10 @@ let ws:WebSocket;
 let td=new TextDecoder;
 let te=new TextEncoder;
 let closing=false;
+let imports;
+let any:Record<string,Function>={}; // mitigare vscode warnings
+let console=new Proxy(any,{get(o,p){return imports.logsole[p]}});
 //let active=true;
-console.log("ws.deno.ts");
 
 function handler(frame:WsFrame){
     console.log("ws.deno.ts frame",frame);
@@ -43,8 +45,9 @@ export default async function(socket: HttpSocket, url, get, opt){
     socket.close(); 
     del();
 }
-export async function init(socket: HttpSocket, url: URL, get: string, opt, dele: ()=> void, past: any|void){
+export async function init(socket: HttpSocket, url: URL, get: string, opt, dele: ()=> void, past: any|void, imps){
     del=dele;
+    imports=imps;
     const {client}=socket;
     console.log("ws.deno.ts",socket.client);
 

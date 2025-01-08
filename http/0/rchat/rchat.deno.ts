@@ -6,9 +6,11 @@ let visits=0;
 let td=new TextDecoder;
 let te=new TextEncoder;
 let closing=false;
+let imp;
 const room:WebSocket[]=[];
 //let active=true;
-console.log("rchat.deno.ts");
+let any:Record<string,Function>={}; // mitigare vscode warnings
+let console=new Proxy(any,{get(o,p){return imp.logsole[p]}});
 
 async function handler(dest:number,ws:WebSocket,frame:WsFrame){
     console.log("ws.deno.ts frame",frame);
@@ -74,8 +76,9 @@ export default async function(socket: HttpSocket, url, get, opt){
         socket.close(); 
     }
 }
-export async function init(socket: HttpSocket, url: URL, get: string, opt, dele: ()=> void, past: any|void){
+export async function init(socket: HttpSocket, url: URL, get: string, opt, dele: ()=> void, past: any|void, imports){
     del=dele;
+    imp=imports;
     const {client}=socket;
     console.log("rchat.deno.ts",0);
     

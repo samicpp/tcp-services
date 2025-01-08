@@ -49,5 +49,5 @@ export async function init(socket, url, get, opt, dele,self,imports){
     del=dele;
     await main(socket).catch(e=>e);
     createCanvas=imports.canvas.createCanvas;
-    console.log("canvas.deno.ts",createCanvas);
+    imports.logsole.log("canvas.deno.ts",createCanvas);
 }

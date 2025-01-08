@@ -1,10 +1,11 @@
 import Engine from './engine.ts';
 import * as http from './http-server.ts';
 import docs from "./docs.d.ts";
+import * as Logsole from './console.ts';
 //import "jsr:@std/dotenv/load";
 const deno=Deno; // mitigate error messages in vscode
 
-let logcatPath='D:\\tcp\\logcat.log';
+let logcatPath=deno.env.get("logcatfile");
 
 Error.stackTraceLimit = 1000;
 
@@ -38,7 +39,9 @@ const tc={
     d:TextDecoder.prototype.decode.bind(new TextDecoder),
 };
 
-const logfile=new class Logcat{
+const [logfile,logsole]=Logsole.default(logcatPath);
+
+/*const logfile=new class Logcat{
     stream; writer; ready;
     constructor(){
         this.ready=this.#init();
@@ -89,7 +92,7 @@ wraploop:for(let p of keys){
             console._error("console invokation failed because",err);
         }
     };
-};
+};*/
 
 
 //console.log(tlsopt);
@@ -101,14 +104,14 @@ await logfile.log("system",`start of ${import.meta.url}`);
 
 //console.log("options",args);
 
-if(args.opt.help)console.log()
+if(args.opt.help)logsole.log()
 
 let ports=args.opt.http||[];
 let sports=args.opt.https||[];
 let dports=args.opt.dyn||[];
 let silent=args.opt.silent||args.sopt.includes("s");
 
-console.allow=!silent;
+logsole.allow=!silent;
 
 
 let allPerms=0;[
@@ -119,7 +122,7 @@ let allPerms=0;[
 ].forEach(e=>allPerms+=e.state=="granted");
 
 if(allPerms!=4){
-    console.error(`need net, env and file permissions`);
+    logsole.error(`need net, env and file permissions`);
     deno.exit(1);
 }
 
@@ -139,16 +142,16 @@ tcp.proxied=true;
 tcp.intTlsOpt=tlsopt;
 for(let dport of dports)tcp.proxy(parseInt(dport));
 tcp.on("connect",http.listener);
-tcp.on("null data",e=>console.log("no data"));
-tcp.on("error",e=>console.error(e));
+tcp.on("null data",e=>logsole.log("no data"));
+tcp.on("error",e=>logsole.error(e));
 
-console.log('pid: ',deno.pid);
+logsole.log('pid: ',deno.pid);
 await deno.writeTextFile("last-pid.txt", deno.pid);
 
 let lastBeat=Date.now();
 setInterval(()=>{
     let t=Date.now();
-    console.log("keep alive",t-lastBeat);
+    logsole.log("keep alive",t-lastBeat);
     lastBeat=t;
 },1*60*60*1000);
 
@@ -163,4 +166,4 @@ setInterval(()=>{
     };
 })();// */
 
-console.log("main.ts finish",new Date());
+logsole.log("main.ts finish",new Date());
