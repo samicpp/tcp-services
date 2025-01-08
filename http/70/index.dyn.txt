@@ -1,0 +1,1 @@
+${socket.client.address.hostname} ${socket.type} ${socket.client.path}

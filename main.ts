@@ -1,6 +1,7 @@
 import Engine from './engine.ts';
 import * as http from './http-server.ts';
 import docs from "./docs.d.ts";
+//import "jsr:@std/dotenv/load";
 const deno=Deno; // mitigate error messages in vscode
 
 let logcatPath='D:\\tcp\\logcat.log';
@@ -110,20 +111,21 @@ console.allow=!silent;
 
 let allPerms=0;[
     deno.permissions.querySync({ name: "net" }),
+    deno.permissions.querySync({ name: "env" }),
     deno.permissions.querySync({ name: "read" }),
     deno.permissions.querySync({ name: "write" }),
 ].forEach(e=>allPerms+=e.state=="granted");
 
-if(allPerms!=3){
-    console.error(`need net and file read permissions`);
+if(allPerms!=4){
+    console.error(`need net, env and file permissions`);
     deno.exit(1);
 }
 
 
 let tlsopt: TlsOptions={
-    key: deno.readTextFileSync("D:\\privkey.pem"),
-    cert: deno.readTextFileSync("D:\\fullchain.pem"),
-    ca: deno.readTextFileSync("D:\\chain.pem"),
+    key: await deno.readTextFile(deno.env.get("keyfile")).catch(e=>""),
+    cert: await deno.readTextFile(deno.env.get("certfile")).catch(e=>""),
+    ca: await deno.readTextFile(deno.env.get("cafile")).catch(e=>""),
 };
 
 

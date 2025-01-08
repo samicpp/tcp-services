@@ -1,7 +1,7 @@
 {
-    "default":"0",
-    "cppdev.dev":"0",
-    "www.cppdev.dev":"0",
-    "t.cppdev.dev":"70",
-    "mc.cppdev.dev":"mc"
+    "default":{"dir":"0"},
+    "https://cppdev.dev":{"dir":"0"},
+    "https://www.cppdev.dev":{"dir":"0"},
+    "https://t.cppdev.dev":{"dir":"70"},
+    "https://mc.cppdev.dev":{"dir":"mc"}
 }

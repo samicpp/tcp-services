@@ -1,6 +1,5 @@
 import mime from "./mime-types.json" with { type: "json" };
 import docs from "./docs.d.ts";
-import "jsr:@std/dotenv/load";
 import OpenAI from "https://deno.land/x/openai@v4.20.1/mod.ts";
 import * as canvas from "https://deno.land/x/canvas/mod.ts";
 import ollama from "npm:ollama";
@@ -9,25 +8,30 @@ import * as pug from "https://deno.land/x/pug/mod.ts";
 
   
 
+function envget(name:string,def:any=null):any{
+  return Deno.env.has(name)?Deno.env.get(name):def;
+}
 const AsyncFunction=(async function(){}).constructor;
 const te=new TextEncoder();
 const td=new TextDecoder();
-const secret=JSON.parse(Deno.readTextFileSync("D:\\secrets.json"));
-const openAI = new OpenAI({apiKey:secret["openai-key"]});
+const openAI = new OpenAI({apiKey:envget("openai_key")});
 const dyn={};
 const aid={};
 const imports={openAI,canvas,OpenAI,ollama,pdflib,pug};
-const caches:Record<string,{date:number,content:string|Uint8Array,headers:Record<string,string>}>={};
+const caches:Record<string,{date:number,content:string|Uint8Array,headers:Record<string,string>,status:number,statusMessage:string}>={};
 const fcaches:Record<string,{date:number,buffer:Uint8Array}>={};
 const cacheTime:number=10_000;
+const dissallow:string[]=envget("dissallow",[]).split(";");
 
 function cache(get,socket:HttpSocket){
   let d=Date.now();
   //console.log("looking for cache",caches[get]?.date<Date.now()-cacheTime);
   if(caches[get]&&caches[get].date>d-cacheTime){
     for(let [k,v] of Object.entries(caches[get].headers))socket.setHeader(k,v);
+    socket.status=caches[get].status;
+    socket.statusMessage=caches[get].statusMessage;
     socket.close(caches[get].content);
-    console.log("using caches for response");
+    console.log("using caches for response",caches[get].content.length);
     return true;
   } else return false;
 };
@@ -75,10 +79,10 @@ export async function listener({socket,client}: HttpSocket){
         this.ready=async function(){
           const json = JSON.parse(await readfText(t.defdir+"/config.json"));
           
-          let tar=json[t.host];
+          let tar=json[t.origin];
           let dtar=json.default
 
-          t.tardir=tar||dtar
+          t.tardir=tar.dir||dtar.dir
         }();
       }
     };
@@ -99,41 +103,53 @@ export async function listener({socket,client}: HttpSocket){
       return ret;
     };
 
+    async function e403(get:string,err:Error){
+      let eget=url.getStart+"/errors/403.dyn.html";
+      console.log(err);
+      let stat=await exists(eget);
+      socket.status=403;
+      socket.statusMessage="Permission Denied";
+      if(!stat){
+        await socket.close("error");
+      } else {
+        await file(eget,{get,err});
+      }
+    }
     async function e404(get:string): Promise<void>{
       let eget=url.getStart+"/errors/404.dyn.html";
       console.log("file doesnt exist");
       let stat=await exists(eget);
       console.log(stat);
+      socket.status=404;
+      socket.statusMessage="Not found";
       if(!stat){
-        socket.status=404;
-        socket.statusMessage="Not found";
         await socket.close(url.pathname+" not found\n");
       } else {
-        file(eget,{get});
+        await file(eget,{get});
       }
       //socket.close();
     };
     async function e409(get:string){
       let eget=url.getStart+"/errors/409.dyn.html";
       let stat=await exists(eget);
+      socket.status=409;
+      socket.statusMessage="Conflict";
       if(!stat){
-        socket.status=409;
-        socket.statusMessage="Conflict";
         await socket.close("conflict");
       } else {
-        file(eget,{get});
+        await file(eget,{get});
       }
       //socket.close();
     };
     async function e400(){
       let eget=url.getStart+"/errors/400.dyn.html";
       let stat=await exists(eget);
+      socket.status=409;
+      socket.statusMessage="Conflict";
       if(!stat){
-        socket.status=409;
-        socket.statusMessage="Conflict";
         await socket.close("conflict");
       } else {
-        file(eget,{});
+        await file(eget,{});
       }
       //socket.close();
     };
@@ -141,12 +157,12 @@ export async function listener({socket,client}: HttpSocket){
       let eget=url.getStart+"/errors/500.dyn.html";
       console.log(err);
       let stat=await exists(eget);
+      socket.status=500;
+      socket.statusMessage="Internal Server Error";
       if(!stat){
-        socket.status=500;
-        socket.statusMessage="Internal Server Error";
         await socket.close("error");
       } else {
-        file(eget,{get,err});
+        await file(eget,{get,err});
       }
     }
 
@@ -197,12 +213,23 @@ export async function listener({socket,client}: HttpSocket){
         let dct=mime[""+lext];
         let dynamic=false;
         let isJss=/.*\.dyn\.[a-z]+/.test(last);
+        let stop=false;
 
         async function jss(content){
           return await AsyncFunction("socket,url,get,opt,deno,imports",`return \`${content.replaceAll("`","\\`")}\`;`)(socket,url,get,opt,Deno,imports);
         }
 
-        if(last.endsWith(".deno.ts")){
+        for(let d of dissallow){
+          if(last.endsWith(d)){
+            await e403(get,new Error("file not allowed"));
+            stop=true;
+            break;
+          }
+        }
+
+        if(stop){
+          console.log("stop is true");
+        }else if(last.endsWith(".deno.ts")){
           console.log("importing deno thing",get);
           dynamic=true;
           if(dyn[get]?.state&&dyn[get].state?.active){
@@ -357,7 +384,7 @@ export async function listener({socket,client}: HttpSocket){
 
         if(!dynamic){
           console.log(socket.written().length);
-          caches[get]={date:Date.now(),content:socket.written(),headers:socket.headers()};
+          caches[get]={date:Date.now(),content:socket.written(),headers:socket.headers(),status:socket.status,statusMessage:socket.statusMessage};
         };
         //await socket.writeBuffer(bytes);
         //socket.close();
