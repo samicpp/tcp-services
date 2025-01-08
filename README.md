@@ -49,3 +49,9 @@ deno run --allow-read --allow-write --allow-net ./main.ts --dyn=80 --dyn=443
 # Standard server
 deno run --allow-read --allow-write --allow-net ./main.ts --http=80 --https=443
 ```
+
+
+
+# License
+
+This project is licensed under the GNU General Public License v3.0. See the [LICENSE](./LICENSE) file for details.
