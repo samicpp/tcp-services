@@ -334,9 +334,9 @@ class Engine {
       let b=this.#te.encode(text);
       let w=b;
       this.#written.push(...b);
-      if(this.compress){
+      if(this.compress&&this.encoding=="gzip"){
         try{
-          if(this.encoding=="gzip")w=compress.gzip(b);
+          w=compress.gzip(b);
           this.setHeader("Content-Encoding", "gzip");
         } catch(err){
           ;
@@ -352,9 +352,9 @@ class Engine {
       let b=buffer;
       let w=b;
       this.#written.push(...b);
-      if(this.compress){
+      if(this.compress&&this.encoding=="gzip"){
         try{
-          if(this.encoding=="gzip")w=compress.gzip(b);
+          w=compress.gzip(b);
           this.setHeader("Content-Encoding", "gzip");
         } catch(err){
           ;
@@ -375,9 +375,9 @@ class Engine {
         await this.#writeTcp(this.#te.encode("0\r\n\r\n"));
       } else {
         let w=b;
-        if(this.compress){
+        if(this.compress&&this.encoding=="gzip"){
           try{
-            if(this.encoding=="gzip")w=compress.gzip(b);
+            w=compress.gzip(b);
             this.setHeader("Content-Encoding", "gzip");
           } catch(err){
             ;
