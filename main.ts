@@ -6,6 +6,8 @@ const deno=Deno; // mitigate error messages in vscode
 
 let logcatPath='D:\\tcp\\logcat.log';
 
+Error.stackTraceLimit = 1000;
+
 let args:{
     opt:Record<string,string[]>;
     sopt:string;
