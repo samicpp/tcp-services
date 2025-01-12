@@ -63,8 +63,19 @@ deno run --allow-read --allow-write --allow-net ./main.ts --dyn=80 --dyn=443
 deno run --allow-read --allow-write --allow-net ./main.ts --http=80 --https=443
 ```
 
+# TODO
+This is a list of things i might implement in the future.
+
+## engine.ts
+ - [ ] Full HTTP/2 support (not just translation).
+ - [ ] Fix client data reading.
+ - [ ] ~~Full HTTP/3 support~~ (no reliable UDP related methods in deno yet)
+
+## http-server.ts
+- [ ] Support FFI and WASM dynamic files
+
 
 
 # License
 
-This project is licensed under the GNU General Public License v3.0. See the [LICENSE](./LICENSE) file for details.
+This project and everything in it is licensed under the GNU General Public License v3.0. See the [LICENSE](./LICENSE) file for details.
