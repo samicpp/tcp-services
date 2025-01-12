@@ -5,7 +5,7 @@ import * as canvas from "https://deno.land/x/canvas/mod.ts";
 import ollama from "npm:ollama";
 import * as pdflib from "https://cdn.skypack.dev/pdf-lib@^1.11.1?dts";
 import * as pug from "https://deno.land/x/pug/mod.ts";
-import LS from "./logsole.ts";
+import LS from "./console.ts";
 
   
 

@@ -40,7 +40,7 @@ const tc={
 };
 
 const [logfile,logsole]=Logsole.default(logcatPath);
-
+await logfile.ready;
 /*const logfile=new class Logcat{
     stream; writer; ready;
     constructor(){

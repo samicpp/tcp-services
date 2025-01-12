@@ -35,10 +35,13 @@ export class Logcat{
 };
 
 //let consoleKeys=Object.keys(Object.getOwnPropertyDescriptors(console));
-export class LogcatConsole extends Proxy{
+export class LogcatConsole{
     #logcat:Logcat; allow:boolean;
+    #proxy;
     constructor(logcat:Logcat){
-        super(console,{get(o,p){
+        this.#logcat=logcat;
+        const th=this;
+        this.#proxy=new Proxy(console,{get(o,p){
             if(typeof o[p]!="function"||["Console"].includes(p))return o[p];
             return async function(...args){
                 try{
@@ -54,20 +57,23 @@ export class LogcatConsole extends Proxy{
                 }
         
                 try{
-                    console[p](...args);
+                    if(th.allow)console[p](...args);
                 }catch(err){
                     console.error("console invokation failed because",err);
                 }
             };
         }});
-        this.#logcat=logcat;
     }
+
+    get log(){return this.#proxy.log}
+    get warn(){return this.#proxy.warn}
+    get error(){return this.#proxy.error}
 }
 
 let logcat:Logcat;
 let logsole:LogcatConsole;
 export default function setup(logPath){
-    if(logcat&&logsole){
+    if(!logcat&&!logsole){
         logcat=new Logcat(logPath);
         logsole=new LogcatConsole(logcat);
     }
