@@ -77,11 +77,11 @@ This is a list of things i might implement in the future.
 
 ## http-server.ts
 - [ ] Support FFI and WASM dynamic files.
-- [ ] Improve configurability (e.g. variable error paths)
+- [ ] Improve configurability (e.g. variable error paths).
 
 ## main.ts
-- [ ] Read and eval Stein argument
-- [ ] Better CLI arguments
+- [ ] Read and eval stdin input.
+- [ ] Better CLI arguments.
 
 ## tcp-proxy.ts
 - [ ] Make the service.
