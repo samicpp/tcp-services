@@ -73,6 +73,7 @@ This is a list of things i might implement in the future.
  - [ ] Full HTTP/2 support (not just translation).
  - [ ] Fix client data reading.
  - [ ] ~~Full HTTP/3 support~~ (no reliable UDP related methods in deno yet).
+ - [ ] Store system headers (things like `Content-Length`) separate from user configurable headers.
 
 ## http-server.ts
 - [ ] Support FFI and WASM dynamic files.
