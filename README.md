@@ -66,14 +66,24 @@ deno run --allow-read --allow-write --allow-net ./main.ts --http=80 --https=443
 # TODO
 This is a list of things i might implement in the future.
 
+- [ ] Fix elsint to make project compilable.
+
 ## engine.ts
  - [ ] Full HTTP/2 support (not just translation).
  - [ ] Fix client data reading.
- - [ ] ~~Full HTTP/3 support~~ (no reliable UDP related methods in deno yet)
+ - [ ] ~~Full HTTP/3 support~~ (no reliable UDP related methods in deno yet).
 
 ## http-server.ts
-- [ ] Support FFI and WASM dynamic files
+- [ ] Support FFI and WASM dynamic files.
+- [ ] Improve configurability (e.g. variable error paths)
 
+## main.ts
+- [ ] Read and eval Stein argument
+- [ ] Better CLI arguments
+
+## tcp-proxy.ts
+- [ ] Make the service.
+- [ ] TLS decryption.
 
 
 # License
