@@ -3,9 +3,11 @@ Currently I only have 1 service.
 - HTTP
 
 ## HTTP
-- `engine.ts`: HTTP connection handling.
-- `http-server.ts`: Complex HTTP server using `engine.ts`.
-- `main.ts`: responsible for setting up the HTTP server with `http-server.ts` and `engine.ts`
+- [`engine.ts`](/engine.ts): HTTP connection handling.
+- [`http-server.ts`](/http-server.ts): Complex HTTP server using `engine.ts`.
+- [`main.ts`](/main.ts): Responsible for setting up the HTTP server with `http-server.ts` and `engine.ts`
+
+This server is running on [www.cppdev.dev](https://www.cppdev.dev/?reff=github). If anything peculiar happens please notify me by [mail](https://gmail.com) to [sami.cplusplus0@gmail.com](mailto:sami.cplusplus0@gmail.com) or make an issue. Same goes for feature requests.
 
 ### engine.ts
 Methods and use cases specified in `docs.ts`.
