@@ -67,6 +67,7 @@ deno run --allow-read --allow-write --allow-net ./main.ts --http=80 --https=443
 This is a list of things i might implement in the future.
 
 - [ ] Fix elsint to make project compilable.
+- [x] Make todo list.
 
 ## engine.ts
  - [ ] Full HTTP/2 support (not just translation).
