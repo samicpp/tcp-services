@@ -121,6 +121,11 @@ interface HttpSocket {
      */
     readonly type: string;
 
+    /**
+     * Indicates if this object is still being used for a response.
+     */
+    readonly enabled: boolean;
+
     
 
     /**
@@ -287,6 +292,12 @@ interface WebSocket {
     readSize: number;
 
     /**
+     * Initializes the websocket and attempts upgrade if not `none` specified.
+     * @param type The type of conenction it was before. Is either `http1`, `http2`, `http3` or `none`.
+     */
+    init(type: string): Promise<boolean>;
+
+    /**
      * Sends a text frame to the WebSocket client.
      * 
      * @param data The text or binary data to send.
@@ -373,6 +384,26 @@ interface WsFrame {
      * @property Message contains the closing message.
      */
     readonly close: { code:number, message:Uint8Array};
+}
+
+interface Http2Socket{
+    /**
+     * The maximum number of bytes to read per tcp packet.
+     */
+    readSize: number;
+
+    /**
+     * Update the readsize after its been modified
+     */
+    updateSize(size?: number): void;
+
+    /**
+     * Listens for a specific event
+     * 
+     * Used events:
+     *  - `error`: If anything goes wrong this is invoked.
+     */
+    on(event: string, listener: (event:any|unknown)=>void|Promise<void>);
 }
 
 /**

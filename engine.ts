@@ -2,6 +2,8 @@ import * as compress from "jsr:@deno-library/compress";
 import docs from "./docs.d.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.97.0/encoding/base64.ts";
 import { createHash } from "https://deno.land/std@0.97.0/hash/mod.ts";
+import HPACK from "npm:hpack";
+const hpack=new HPACK;
 //const {gzip}=compress
 
 const sec={
@@ -170,7 +172,7 @@ class Engine {
     if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
   }
 
-  #readSize= 1024 * 10;
+  #readSize=4*1024**2; // 4MiB
   set readSize(int:any){
     this.#readSize=parseInt(int);
   }
@@ -182,15 +184,18 @@ class Engine {
     #server; #type;
 
     #closed=false;
+    #upgraded=false;
     #isWebsocket=false;
+
+    get enabled(): boolean{ return !this.#isWebsocket&&!this.#upgraded; };
 
     
 
     get tcpSocket() {
-      if(!this.#isWebsocket)return this.#tcp;
+      if(!this.enabled)return this.#tcp;
     }
     get tcpData() {
-      if(!this.#isWebsocket)return this.#data;
+      if(!this.enabled)return this.#data;
     }
 
     get engine() { return this.engine; }
@@ -209,14 +214,15 @@ class Engine {
       //console.log(server);
       //console.log(Object.getOwnPropertyDescriptors(Object.getPrototypeOf(server)));
 
+
       let encodings=this.client.headers["accept-encoding"];
       //console.log("encodings",encodings,encodings&&encodings.includes("gzip"))
       if(encodings&&encodings.includes("gzip"))this.compress=true;
     }
     #client;
     get client(): Client|null {
+      if(this.enabled) return null;
       if (this.#client) return this.#client;
-      if(this.#isWebsocket) return null;
       let c = new class Client {
         isValid: boolean = false;
         err: void | object;
@@ -301,19 +307,19 @@ class Engine {
       }
     }
     setHeader(a: string, b: string): boolean {
-      if(this.#isWebsocket)return false;
+      if(this.enabled)return false;
       if (this.#headersSent == true) return false;
       this.#headers[a] = b;
       return true;
     }
     removeHeader(a: string): boolean{
-      if(this.#isWebsocket)return false;
+      if(this.enabled)return false;
       if (this.#headersSent == true) return false;
       if(this.#headers[a]) return delete this.#headers[a];
       return false;
     }
     writeHead(status?: number, statusMessage?: string, headers?: object): void {
-      if(this.#isWebsocket)return;
+      if(this.enabled)return;
       if (this.#headersSent == true) return;
       if (status) this.status = status;
       if (statusMessage) this.statusMessage = statusMessage;
@@ -328,7 +334,7 @@ class Engine {
       await this.#writeTcp(this.#te.encode("\r\n"));
     }
     async writeText(text: string): Promise<void> {
-      if(this.#isWebsocket)return;
+      if(this.enabled)return;
       if(this.#closed)return;
       this.setHeader("Transfer-Encoding","chunked");
       let b=this.#te.encode(text);
@@ -346,7 +352,7 @@ class Engine {
       await this.#writeChunk(w);
     }
     async writeBuffer(buffer: Uint8Array): Promise<void> {
-      if(this.#isWebsocket)return;
+      if(this.enabled)return;
       if(this.#closed)return;
       this.setHeader("Transfer-Encoding","chunked");
       let b=buffer;
@@ -364,7 +370,7 @@ class Engine {
       await this.#writeChunk(w);
     }
     async close(data?: string | ArrayBuffer): Promise<void> {
-      if(this.#isWebsocket)return;
+      if(this.enabled)return;
       if(this.#closed)return;
       //await this.#sendHeaders(0);
       let b=data;
@@ -397,11 +403,15 @@ class Engine {
       this.#closed=true;
     }
     written(): Uint8Array{ return new Uint8Array(this.#written); }
-    deny():void{if(!this.#isWebsocket)this.#tcp.close();}
+    deny():void{if(!this.enabled)this.#tcp.close();}
 
     #ws:WebSocket;
     async websocket():Promise<WebSocket|null>{
+      if(this.#closed)return null;
       if(this.#ws)return this.#ws;
+      if(!this.enabled)return null;
+
+
       const args=[
         this.#engine,
         this.#td,
@@ -412,7 +422,7 @@ class Engine {
       ];
       const ws:WebSocket=new this.#engine.WebSocket(...args)
       this.#ws=ws;
-      let suc:boolean=await ws.ready;
+      let suc:boolean=await ws.init("http1");
       if(suc){
         this.#isWebsocket=true;
         return ws;
@@ -420,6 +430,31 @@ class Engine {
       else return null;
     };
     get isWebSocket(){return this.#isWebsocket};
+
+    #http2:Http2Socket;
+    async http2(){
+      if(this.#closed)return null;
+      if(this.#ws)return this.#ws;
+      if(!this.enabled)return null;
+
+
+      const args=[
+        this.#engine,
+        this.#td,
+        this.#te,
+        this.#tcp,
+        this.#data,
+        this,
+      ];
+      const http2:Http2Socket=new this.#engine.Http2Socket(...args)
+      this.#ws=ws;
+      let suc:boolean=await ws.init("http1");
+      if(suc){
+        this.#isWebsocket=true;
+        return ws;
+      }
+      else return null;
+    }
     //set isWebSocket(iws:boolean){if(iws)this.websocket();}
   };
   #WebSocket = class WebSocket{
@@ -453,11 +488,13 @@ class Engine {
       this.#engine = engine;
       this.#socket = socket;
 
-      let resolve;
-      this.#readyPro=new Promise(r=>resolve=r);
-      this.#ready=resolve;
+      //let resolve;
+      //this.#readyPro=new Promise(r=>resolve=r);
+      //this.#ready=resolve;
 
-      this.#init();
+      this.readSize=engine.readSize;
+
+      //this.#init();
     }
 
     #on = {};
@@ -473,37 +510,55 @@ class Engine {
       }
     }
 
+    async init(type:string){
+      if(!this.#readyPro)return this.#readyPro=this.#init(type);
+      else return await this.#readyPro
+    }
     get#magicString(){return "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"}
-    async#init(){
+    async#init(type:string){
       try{
         let client:Client=this.#socket.client;
         if(client.isValid){
-          let key=client.headers["sec-websocket-key"].trim();
-          if(!key)throw new Error("client has no websocket key");
-          
-          const sha1 = createHash("sha1");
-          sha1.update(key + this.#magicString);
-          const wsKey=base64Encode(sha1.digest());
+          if(type=="none"){
+            this.#listener();
+            return this.#isReady=true;
+          }else if(type=="http1"){
+            let key=client.headers["sec-websocket-key"].trim();
+            if(!key)throw new Error("client has no websocket key");
+            
+            const sha1 = createHash("sha1");
+            sha1.update(key + this.#magicString);
+            const wsKey=base64Encode(sha1.digest());
 
-          let res=[
-            "HTTP/1.1 101 Switching Protocols",
-            "Upgrade: websocket",
-            "Connection: Upgrade",
-            `Sec-WebSocket-Accept: ${wsKey}`,
-            "\r\n",
-          ].join("\r\n");
+            let res=[
+              "HTTP/1.1 101 Switching Protocols",
+              "Upgrade: websocket",
+              "Connection: Upgrade",
+              `Sec-WebSocket-Accept: ${wsKey}`,
+              "\r\n",
+            ].join("\r\n");
 
-          await this.#tcp.write(new TextEncoder().encode(res)).catch(e=>e);
+            await this.#tcp.write(new TextEncoder().encode(res)).catch(e=>e);
+            
 
-          this.#listener();
+            this.#listener();
 
-          this.#ready(this.#isReady=true);
+            return this.#isReady=true;
+          }else if(type=="http2"){
+            // soon
+            return this.#isReady=false;
+          }else if(type=="http3"){
+            // maybe in the future
+            return this.#isReady=false;
+          }else{
+            return this.#isReady=false;
+          };
         } else {
           throw new Error("client is not valid");
         }
       } catch(err) {
         this.#err=err;
-        return this.#ready(false);
+        return false;
       }
 
     }
@@ -679,6 +734,102 @@ class Engine {
       this.#listening=false;
     };
   };
+  #Socket2 = class Http2Socket{
+    #engine; #tcp;
+    #td; #te; #data;
+    #socket; #ready;
+
+    #readSize = 1024 * 10;
+    set readSize(int:any){
+      this.#readSize=parseInt(int);
+    };
+    get readSize():number{return this.#readSize};
+
+    #on = {};
+    on(eventName: string, listener: (event: object) => void|Promise<void>):void {
+      if (!this.#on[eventName]) this.#on[eventName] = [];
+      this.#on[eventName].push(listener);
+    }
+    #emit(eventName: string, obj: object) {
+      if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
+    }
+
+    constructor(engine,td,te,tcp,data,socket){
+      this.#td = td;
+      this.#te = te;
+      this.#tcp = tcp;
+      this.#data = data;
+      this.#engine = engine;
+      this.#socket = socket;
+
+      this.#readSize=engine.readSize;
+      this.updateSize();
+      this.#ready=this.#init();
+
+      //try{}catch(err){this.#emit("error",err);};
+    };
+
+    #buffer=new Uint8Array(0);
+    async#read():Promise<Uint8Array>{ return new Uint8Array([...this.#buffer.subarray(0,await this.#tcp.read(this.#buffer))]); };
+    updateSize(size?:number):void { this.#buffer=new Uint8Array(this.#readSize=size||this.#readSize); };
+    //async init(){} // not applicable
+    #magic="PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    //#magicBuffer=new Uint8Array([80,82,73,32,42,32,72,84,84,80,47,50,46,48,13,10,13,10,83,77,13,10,13,10]);
+    #magicASCII="80,82,73,32,42,32,72,84,84,80,47,50,46,48,13,10,13,10,83,77,13,10,13,10";
+    async#init(){
+      try{
+        let client:Client=this.#socket.client;
+        if(client.isValid){
+          let upgd=client.headers["upgrade"].trim();
+          //if(!upgd)throw new Error("client does not wanna upgrade");
+
+          let res=`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n`;
+
+          await this.#tcp.write(this.#te.encode(res)).catch(e=>e);
+            
+
+          let valid=false;
+          let first,ifr;
+          try{
+            first=await this.#read();
+            const mc=first.subarray(0,this.#magic.length);
+            ifr=first.subarray(this.#magic.length);
+            if(mc==this.#magicASCII)valid=true;
+          }catch(err){
+            this.#emit("error",err);
+          };
+
+
+
+          if(valid)this.#listener();
+          else throw new Error("invalid magic character(s)");
+
+          return true;
+        } else {
+          throw new Error("client is not valid");
+        }
+      } catch(err) {
+        this.#emit("error",err);
+        return false;
+      }
+    };
+
+    async#listener(){
+      try{
+        while(true){
+          try{
+            const frame=await this.#read();
+          }catch(err){
+            this.#emit("error",err);
+          };
+        }
+      }catch(err){
+        this.#emit("error",err);
+      };
+    }
+
+    #frame(frame:Uint8Array){}
+  };
 
   async #listener(server, conn:Deno.Conn, type:string, cacheId: number, remoteAddr=conn.remoteAddr): Promise<void> {
     //conn.accept();
@@ -692,19 +843,20 @@ class Engine {
     if(typeof length!="number"||length<=0)return this.#emit("null data", {conn,length,err});
     const data = dat.slice(0, length);
 
-    if(false&&cache.upgrade&&data[0]==22){
+    if(false/*&&cache.upgrade&&data[0]==22*/){
+      /*
       const tlsConn=new this.#Deno.TlsConn(conn,{
         ...cache.tls,
         caCerts: cache.tls.ca
       });
       //console.log(tlsConn.writable);
       await tlsConn.handshake();
-      /*let w=tlsConn.writable.getWriter();
-      console.log(data);
-      await w.write(data).catch(e=>e); 
-      await w.releaseLock();
+      //*let w=tlsConn.writable.getWriter();
+      //console.log(data);
+      //await w.write(data).catch(e=>e); 
+      //await w.releaseLock();
       //await w.close().catch(e=>e);
-      console.log(w);*/
+      //console.log(w);
 
       let dat=new Uint8Array(cache.readSize);
       const length2 = await conn.read(dat).catch(e=>err=e);
@@ -713,6 +865,7 @@ class Engine {
       const type=`tcp::tls`
       const socket = new this.#Socket(this,decoder, encoder, tlsConn, server, data2, type);
       this.#emit("connect", socket);
+      */
     }
     //console.log(data);
     else{
@@ -720,7 +873,8 @@ class Engine {
       this.#emit("connect", socket);
     }
   };
-  get Socket(){ return this.#Socket; };
+  get HttpSocket(){ return this.#Socket; };
+  get Http2Socket(){ return this.#Socket2; };
   get WebSocket(){ return this.#WebSocket; };
   /*__getSocket(secid: SecureID){
     if(sec!=secid)return null;
