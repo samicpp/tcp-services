@@ -3,7 +3,7 @@ import docs from "./docs.d.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.97.0/encoding/base64.ts";
 import { createHash } from "https://deno.land/std@0.97.0/hash/mod.ts";
 import HPACK from "npm:hpack";
-const hpack=new HPACK;
+//const hpack=new HPACK;
 //const {gzip}=compress
 
 const sec={
@@ -818,7 +818,9 @@ class Engine {
       try{
         while(true){
           try{
-            const frame=await this.#read();
+            const pack=await this.#read();
+            const frames=[...this.#packet(pack)];
+
           }catch(err){
             this.#emit("error",err);
           };
@@ -828,7 +830,123 @@ class Engine {
       };
     }
 
-    #frame(frame:Uint8Array){}
+    #hpack=new HPACK;
+    #frameTypes={
+      int:{
+        0 : "data",
+        1 : "headers",
+        2 : "priority",
+        3 : "rst_stream",
+        4 : "settings",
+        5 : "push_promise",
+        6 : "ping",
+        7 : "goaway",
+        8 : "window_update",
+        9 : "continuation",
+      },
+      str:{
+        data: 0,
+        headers: 1,
+        priority: 2,
+        rst_stream: 3,
+        settings: 4,
+        push_promise: 5,
+        ping: 6,
+        goaway: 7,
+        window_update: 8,
+        continuation: 9,
+      },
+    };
+    #frameFlags={ack:1,end_stream:1,end_headers:4,padded:8,priority:32}
+    #frame(streamId:number,type:number|string,flags:number|string[],payload:Uint8Array): Uint8Array{
+      const frameBuffer=new Uint8Array(9+payload.length);
+
+      let flagByte=parseInt(flags.toString());
+      if(typeof type!="number"&&Array.isArray(flags)){
+        for(let f of flags)flagByte+=this.#frameTypes[f];
+      };
+
+      let typeByte=parseInt(type.toString());
+      if(typeof type=="string")typeByte=this.#frameTypes.str[type];
+
+      let hl=payload.length.toString(16);
+      let hlfa=("000000"+hl).substring(hl.length).split("");
+      let hll="";
+      let hlb:number[]=[];
+      for(let i in hlfa)i%2?hlb.push(parseInt(hll+hlfa[i],16)):hll=hlfa[i];
+      
+      let hsi=streamId.toString(16);
+      let hsifa=("00000000"+hsi).substring(hsi.length).split("");
+      let hsil="";
+      let hsib:number[]=[];
+      for(let i in hsifa)i%2?hsib.push(parseInt(hsil+hsifa[i],16)):hsil=hsifa[i];
+
+      const part=new Uint8Array([...hlb,typeByte,flagByte,...hsib]);
+      frameBuffer.set(part);
+      frameBuffer.set(payload,9);
+      
+      
+
+      return frameBuffer
+    }
+    *#packet(buff:Uint8Array){
+      try{
+        // frame types cheat sheet
+        const types=this.#frameTypes;
+        const flags=this.#frameFlags;
+        const hpack=this.#hpack;
+
+        function frame(buff){
+
+          if(buff.length<9)return[{},new Uint8Array()];
+          const length=[...buff.subarray(0,3)];
+          const stream=[...buff.subarray(5,9)];
+          const lenInt=parseInt(length.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+          const streamId=parseInt(stream.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+
+          const frame={
+            raw:{
+              length: length,
+              type: buff[3],
+              flags: buff[4],
+              stream: stream,
+              payload: [...buff.subarray(9,9+lenInt)],
+            },
+            type: types.int[buff[3]],
+
+            flags: [],
+            length: lenInt,
+            streamId: streamId,
+
+            buffer:new Uint8Array,
+            headers:[['k','v']],
+          };
+
+          if([0,1].includes(frame.raw.type)){
+            if(frame.raw.flags & 0x01)frame.flags.push("end_stream");
+            if(frame.raw.flags & 0x04)frame.flags.push("end_headers");
+            if(frame.raw.flags & 0x08)frame.flags.push("padded");
+            if(frame.raw.flags & 0x20)frame.flags.push("priority");
+          } else if([4,6].includes(frame.raw.type)){
+            if(frame.raw.flags==1)frame.flags.push("ack");
+          };
+
+          frame.buffer=new Uint8Array(frame.raw.payload);
+
+          if(frame.raw.type==1)frame.headers=hpack.decode(frame.buffer);
+
+          let remain=buff.subarray(9+lenInt);
+          return [frame,remain];
+        };
+
+        let last=frame(buff);
+        yield last[0];
+        if(!last[1].length)return;
+
+        while((last=frame(last[1]))[1].length)yield last[0];
+        yield last[0];
+      }catch(err){this.#emit("error",err);};
+    };
   };
 
   async #listener(server, conn:Deno.Conn, type:string, cacheId: number, remoteAddr=conn.remoteAddr): Promise<void> {
