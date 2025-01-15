@@ -857,17 +857,22 @@ class Engine {
         continuation: 9,
       },
     };
-    #frameFlags={ack:1,end_stream:1,end_headers:4,padded:8,priority:32}
-    #frame(streamId:number,type:number|string,flags:number|string[],payload:Uint8Array): Uint8Array{
+    #frameFlags={ack:1,end_stream:1,end_headers:4,padded:8,priority:32};
+    //#settingsList={1:"settings_header_table_size",2:"settings_enable_push",3:"settings_max_concurrent_streams",4:"settings_initial_window_size",5:"settings_max+frame_size",6:"settings_max_header_list_size"};
+    #settingsList={1:"header_table_size",2:"enable_push",3:"max_concurrent_streams",4:"initial_window_size",5:"max+frame_size",6:"max_header_list_size"};
+    #frameBuffer(streamId:number,type:number,flags:number,payload:Uint8Array): Uint8Array{
+      if(payload.length>0xffffff)throw new Error("payload size too big");
+      if(flags>0xff)throw new Error("flags too big");
+
       const frameBuffer=new Uint8Array(9+payload.length);
 
       let flagByte=parseInt(flags.toString());
-      if(typeof type!="number"&&Array.isArray(flags)){
-        for(let f of flags)flagByte+=this.#frameTypes[f];
-      };
-
       let typeByte=parseInt(type.toString());
-      if(typeof type=="string")typeByte=this.#frameTypes.str[type];
+
+      /*if(typeof type!="number"&&Array.isArray(flags)){
+        for(let f of flags)flagByte+=this.#frameTypes[f];
+      };*/
+      //if(typeof type=="string")typeByte=this.#frameTypes.str[type];
 
       let hl=payload.length.toString(16);
       let hlfa=("000000"+hl).substring(hl.length).split("");
@@ -888,6 +893,38 @@ class Engine {
       
 
       return frameBuffer
+    };
+    #frame(streamId:number,type:number|string,options:{flags?:number|string[],data:string|Uint8Array,headers:Record<string,string>}){
+
+      let flags=options?.flags||0;
+      let data=options?.data||new Uint8Array;
+      let headers=options?.headers||{};
+      
+      let flagByte=parseInt(flags.toString());
+      let typeByte=parseInt(type.toString());
+      let heh:Uint8Array=this.#hpack.encode(Object.entries(headers));
+
+      if(typeof type!="number"&&Array.isArray(flags)){
+        for(let f of flags)flagByte+=this.#frameTypes[f];
+      };
+      if(typeof type=="string")typeByte=this.#frameTypes.str[type];
+      if(typeof data=="string")data=this.#te.encode(data);
+
+      if(typeof typeByte!="number")throw new Error("invalid type or flags");
+      if(typeof streamId!="number")throw new Error("invalid streamId");
+
+      switch(typeByte){
+        case 1:
+          return {
+            buffer: this.#frameBuffer(streamId,typeByte,flagByte,heh),
+          };
+        
+        default:
+          return {
+            buffer: this.#frameBuffer(streamId,typeByte,flagByte,data),
+          };
+      }
+
     }
     *#packet(buff:Uint8Array){
       try{
@@ -904,6 +941,8 @@ class Engine {
           const lenInt=parseInt(length.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
           const streamId=parseInt(stream.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
 
+          const svkl:Record<string,number>={};
+          const nvkl:Record<number,number>={};
           const frame={
             raw:{
               length: length,
@@ -920,6 +959,9 @@ class Engine {
 
             buffer:new Uint8Array,
             headers:[['k','v']],
+
+            _settingsRaw:[],
+            settings:{str:svkl,int:nvkl},
           };
 
           if([0,1].includes(frame.raw.type)){
@@ -934,6 +976,34 @@ class Engine {
           frame.buffer=new Uint8Array(frame.raw.payload);
 
           if(frame.raw.type==1)frame.headers=hpack.decode(frame.buffer);
+          if(frame.raw.type==4){
+            let u:number[]=frame.raw.payload;
+            let set:number[][]=[];
+            let lset:number[]=[];
+            for(let i in u){
+              console.log(i,i%6,i%6!=5);
+              if(i%6!=5){
+                lset.push(u[i]);
+              }
+              else{
+                lset.push(u[i]);
+                set.push(lset);
+                lset=[];
+              };
+            };
+            
+            //let hvs={};
+            for(let s of set){
+              let nam=s.slice(0,2);
+              let val=s.slice(2);
+
+              let name=parseInt(nam.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+              let value=parseInt(val.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+
+              nvkl[name]=value;
+              svkl[this.#settingsList[name]]=value;
+            }
+          }
 
           let remain=buff.subarray(9+lenInt);
           return [frame,remain];
