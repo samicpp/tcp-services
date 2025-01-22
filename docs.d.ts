@@ -449,6 +449,15 @@ interface Http2Frame{
     headers:number[],
 
     /**
+     * Containts the error code, target stream ID and optional message if applicable
+     */
+    error:{
+        streamId:number;
+        code:number;
+        message:Uint8Array;
+    };
+
+    /**
      * The settings sent by the frame if applicable.
      * 
      * @property str An object with the settings where the property is the string form of the setting.

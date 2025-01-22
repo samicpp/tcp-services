@@ -900,8 +900,9 @@ class Engine extends StandardMethods{
       let settList:number[]=[];
       let settBuff:Uint8Array=new Uint8Array;
 
-      if(typeof type!="number"&&Array.isArray(flags)){
-        for(let f of flags)flagByte+=this.#frameTypes[f];
+      if(typeof flags!="number"&&Array.isArray(flags)){
+        flagByte=0;
+        for(let f of flags)flagByte+=this.#frameFlags[f];
       };
       if(typeof type=="string")typeByte=this.#frameTypes.str[type];
       if(typeof data=="string")data=this.#te.encode(data);
@@ -977,6 +978,12 @@ class Engine extends StandardMethods{
             buffer:new Uint8Array,
             headers:[],
 
+            error:{
+              code:0,
+              streamId:0,
+              message:new Uint8Array,
+            },
+
             //_settingsRaw:[],
             settings:{str:svkl,int:nvkl},
           };
@@ -1020,7 +1027,19 @@ class Engine extends StandardMethods{
               nvkl[name]=value;
               svkl[settingsList[name]]=value;
             }
-          }
+          };
+          if(frame.raw.type==7){
+            let lastsidr=frame.buffer.subarray(0,4);
+            let errnor=frame.buffer.subarray(4,8);
+            let msg=frame.buffer.subarray(8);
+
+            let lastsid=parseInt(lastsidr.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+            let errno=parseInt(errnor.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+            
+            frame.error.code=errno;
+            frame.error.streamId=lastsid;
+            frame.error.message=new Uint8Array([...msg]);
+          };
 
           let remain=buff.subarray(9+lenInt);
           return [frame,remain];
