@@ -16,7 +16,18 @@ interface SecureID{
 
 const TypedArray=Object.getPrototypeOf(Uint8Array.prototype).constructor;
 
-class Engine {
+class StandardMethods{
+  #on = {};
+  on(eventName: string, listener: (event: object) => void|Promise<void>):void {
+    if (!this.#on[eventName]) this.#on[eventName] = [];
+    this.#on[eventName].push(listener);
+  }
+  emit(eventName: string, obj: object) {
+    if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
+  }
+}
+
+class Engine extends StandardMethods{
   #Deno = Deno;
   //deno = this.#Deno;
   #te = new TextEncoder();
@@ -62,6 +73,7 @@ class Engine {
   }
 
   constructor(intPort?:number,intTlsPort?:number,intTlsOpt?:TlsOptions) {
+    super();
     if(arguments.length>0){
       this.proxied=true;
       this.intPort=intPort;
@@ -163,14 +175,6 @@ class Engine {
     }
   }
 
-  #on = {};
-  on(eventName: string, listener: (event: object) => void|Promise<void>):void {
-    if (!this.#on[eventName]) this.#on[eventName] = [];
-    this.#on[eventName].push(listener);
-  }
-  #emit(eventName: string, obj: object) {
-    if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
-  }
 
   #readSize=4*1024**2; // 4MiB
   set readSize(int:any){
@@ -178,7 +182,7 @@ class Engine {
   }
   get readSize():number{return this.#readSize};
   
-  #Socket = class HttpSocket {
+  #Socket = class HttpSocket extends StandardMethods {
     #engine; #tcp; #ra;
     #td; #te; #data;
     #server; #type;
@@ -202,6 +206,8 @@ class Engine {
     get socket() { return this; }
     get type() { return this.#type; }
     constructor(engine,td, te, tcp, server, data, type, remoteAddr) {
+      super();
+
       this.#td = td;
       this.#te = te;
       this.#tcp = tcp;
@@ -457,7 +463,7 @@ class Engine {
     }
     //set isWebSocket(iws:boolean){if(iws)this.websocket();}
   };
-  #WebSocket = class WebSocket{
+  #WebSocket = class WebSocket extends StandardMethods{
     #engine; #tcp;
     #td; #te; #data;
     #socket; #isReady=false;
@@ -481,6 +487,8 @@ class Engine {
     get readSize():number{return this.#readSize};
 
     constructor(engine, td, te, tcp, data, socket){
+      super();
+
       this.#td = td;
       this.#te = te;
       this.#tcp = tcp;
@@ -497,18 +505,7 @@ class Engine {
       //this.#init();
     }
 
-    #on = {};
-    on(eventName: string, listener: (event: object) => void|Promise<void>):void {
-      if (!this.#on[eventName]) this.#on[eventName] = [];
-      this.#on[eventName].push(listener);
-    }
-    #emit(eventName: string, obj: object) {
-      try{
-        if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
-      } catch(err) {
-        if (this.#on["emit-err"]) this.#on["emit-err"].forEach((e) => e(err));
-      }
-    }
+    
 
     async init(type:string){
       if(!this.#readyPro)return this.#readyPro=this.#init(type);
@@ -577,11 +574,11 @@ class Engine {
           const frame = this.#parseFrame(frameBuff);
           if (!frame) throw new Error("could not parse frame data");
 
-          this.#emit("frame", frame);
+          this.emit("frame", frame);
         }
       } catch(err){
         this.#err=err;
-        this.#emit("error", err);
+        this.emit("error", err);
       }
       this.#listening=false;
     }
@@ -734,7 +731,7 @@ class Engine {
       this.#listening=false;
     };
   };
-  #Socket2 = class Http2Socket{
+  #Socket2 = class Http2Socket extends StandardMethods{
     #engine; #tcp;
     #td; #te; #data;
     #socket; #ready;
@@ -745,16 +742,10 @@ class Engine {
     };
     get readSize():number{return this.#readSize};
 
-    #on = {};
-    on(eventName: string, listener: (event: object) => void|Promise<void>):void {
-      if (!this.#on[eventName]) this.#on[eventName] = [];
-      this.#on[eventName].push(listener);
-    }
-    #emit(eventName: string, obj: object) {
-      if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
-    }
 
     constructor(engine,td,te,tcp,data,socket){
+      super();
+
       this.#td = td;
       this.#te = te;
       this.#tcp = tcp;
@@ -796,7 +787,7 @@ class Engine {
             ifr=first.subarray(this.#magic.length);
             if(mc==this.#magicASCII)valid=true;
           }catch(err){
-            this.#emit("error",err);
+            this.emit("error",err);
           };
 
 
@@ -809,7 +800,7 @@ class Engine {
           throw new Error("client is not valid");
         }
       } catch(err) {
-        this.#emit("error",err);
+        this.emit("error",err);
         return false;
       }
     };
@@ -822,11 +813,11 @@ class Engine {
             const frames=[...this.#packet(pack)];
 
           }catch(err){
-            this.#emit("error",err);
+            this.emit("error",err);
           };
         }
       }catch(err){
-        this.#emit("error",err);
+        this.emit("error",err);
       };
     }
 
@@ -859,7 +850,8 @@ class Engine {
     };
     #frameFlags={ack:1,end_stream:1,end_headers:4,padded:8,priority:32};
     //#settingsList={1:"settings_header_table_size",2:"settings_enable_push",3:"settings_max_concurrent_streams",4:"settings_initial_window_size",5:"settings_max+frame_size",6:"settings_max_header_list_size"};
-    #settingsList={1:"header_table_size",2:"enable_push",3:"max_concurrent_streams",4:"initial_window_size",5:"max+frame_size",6:"max_header_list_size"};
+    #settingsList={1:"header_table_size",2:"enable_push",3:"max_concurrent_streams",4:"initial_window_size",5:"max_frame_size",6:"max_header_list_size"};
+    #settingsList2={"header_table_size":1,"enable_push":2,"max_concurrent_streams":3,"initial_window_size":4,"max_frame_size":5,"max_header_list_size":6};
     #frameBuffer(streamId:number,type:number,flags:number,payload:Uint8Array): Uint8Array{
       if(payload.length>0xffffff)throw new Error("payload size too big");
       if(flags>0xff)throw new Error("flags too big");
@@ -894,21 +886,38 @@ class Engine {
 
       return frameBuffer
     };
-    #frame(streamId:number,type:number|string,options:{flags?:number|string[],data:string|Uint8Array,headers:Record<string,string>}){
+    #frame(streamId:number,type:number|string,options?:{flags?:number|string[],data?:string|Uint8Array,headers?:Record<string,string>,settings?:Record<string|number,number>}){
+      if(!options)options={};
 
       let flags=options?.flags||0;
       let data=options?.data||new Uint8Array;
       let headers=options?.headers||{};
+      let settings=options?.settings||{};
       
       let flagByte=parseInt(flags.toString());
       let typeByte=parseInt(type.toString());
       let heh:Uint8Array=this.#hpack.encode(Object.entries(headers));
+      let settList:number[]=[];
+      let settBuff:Uint8Array=new Uint8Array;
 
       if(typeof type!="number"&&Array.isArray(flags)){
         for(let f of flags)flagByte+=this.#frameTypes[f];
       };
       if(typeof type=="string")typeByte=this.#frameTypes.str[type];
       if(typeof data=="string")data=this.#te.encode(data);
+      for(let s in settings){
+        let i:number,v:string[],v2:number[]=[],o:string[],o2:number[]=[];
+        if(typeof s=="number")i=s;
+        else i=this.#settingsList2[s];
+        if(!i)continue;
+        v=("000"+i.toString(16)).substring(i.toString(16).length).match(/.{1,2}/g)||[];
+        o=("0000000"+i.toString(16)).substring(i.toString(16).length).match(/.{1,2}/g)||[];
+        for(let t of v)v2.push(parseInt(t,16));
+        for(let t of o)o2.push(parseInt(t,16));
+        settList.push(...[...v2,...o2]);
+      }
+
+      settBuff=new Uint8Array(settList);
 
       if(typeof typeByte!="number")throw new Error("invalid type or flags");
       if(typeof streamId!="number")throw new Error("invalid streamId");
@@ -918,6 +927,13 @@ class Engine {
           return {
             buffer: this.#frameBuffer(streamId,typeByte,flagByte,heh),
           };
+        
+        case 4:
+          return {
+            buffer: this.#frameBuffer(streamId,typeByte,flagByte,settBuff),
+          };
+        
+        
         
         default:
           return {
@@ -931,6 +947,7 @@ class Engine {
         // frame types cheat sheet
         const types=this.#frameTypes;
         const flags=this.#frameFlags;
+        const settingsList=this.#settingsList;
         const hpack=this.#hpack;
 
         function frame(buff){
@@ -943,7 +960,7 @@ class Engine {
 
           const svkl:Record<string,number>={};
           const nvkl:Record<number,number>={};
-          const frame={
+          const frame:Http2Frame={
             raw:{
               length: length,
               type: buff[3],
@@ -958,9 +975,9 @@ class Engine {
             streamId: streamId,
 
             buffer:new Uint8Array,
-            headers:[['k','v']],
+            headers:[],
 
-            _settingsRaw:[],
+            //_settingsRaw:[],
             settings:{str:svkl,int:nvkl},
           };
 
@@ -981,7 +998,7 @@ class Engine {
             let set:number[][]=[];
             let lset:number[]=[];
             for(let i in u){
-              console.log(i,i%6,i%6!=5);
+              //console.log(i,i%6,i%6!=5);
               if(i%6!=5){
                 lset.push(u[i]);
               }
@@ -1001,7 +1018,7 @@ class Engine {
               let value=parseInt(val.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
 
               nvkl[name]=value;
-              svkl[this.#settingsList[name]]=value;
+              svkl[settingsList[name]]=value;
             }
           }
 
@@ -1015,7 +1032,7 @@ class Engine {
 
         while((last=frame(last[1]))[1].length)yield last[0];
         yield last[0];
-      }catch(err){this.#emit("error",err);};
+      }catch(err){this.emit("error",err);};
     };
   };
 
@@ -1028,7 +1045,7 @@ class Engine {
     //console.log('incoming connection',conn);
     let err=null;
     const length = await conn.read(dat).catch(e=>err=e);
-    if(typeof length!="number"||length<=0)return this.#emit("null data", {conn,length,err});
+    if(typeof length!="number"||length<=0)return this.emit("null data", {conn,length,err});
     const data = dat.slice(0, length);
 
     if(false/*&&cache.upgrade&&data[0]==22*/){
@@ -1058,7 +1075,7 @@ class Engine {
     //console.log(data);
     else{
       const socket = new this.#Socket(this,decoder, encoder, conn, server, data, type, remoteAddr);
-      this.#emit("connect", socket);
+      this.emit("connect", socket);
     }
   };
   get HttpSocket(){ return this.#Socket; };

@@ -406,6 +406,57 @@ interface Http2Socket{
     on(event: string, listener: (event:any|unknown)=>void|Promise<void>);
 }
 
+interface Http2Frame{
+    /**
+     * A collection of properties used for processing. Under normal circumstances shouldn't be used.
+     */
+    raw:{
+      length: number[],
+      type: number,
+      flags: number,
+      stream: number[],
+      payload: number[],
+    },
+
+    /**
+     * The type of the frame stored as string
+     */
+    type: string,
+
+    /**
+     * The frame flags as strings.
+     */
+    flags: string[],
+
+    /**
+     * The payload length
+     */
+    length: number,
+
+    /**
+     * The frame's stream ID.
+     */
+    streamId: number,
+
+    /**
+     * The frames payload as buffer. When the frame is of type settings or headers it shouldn't be used.
+     */
+    buffer:Uint8Array,
+
+    /**
+     * The headers sent by the frame if applicable.
+     */
+    headers:number[],
+
+    /**
+     * The settings sent by the frame if applicable.
+     * 
+     * @property str An object with the settings where the property is the string form of the setting.
+     * @property int An object with the settings where the property is the integer form of the setting.
+     */
+    settings:{str:Record<string,number>,int:Record<number,number>},
+}
+
 /**
  * Heres an example for using this framework
  */
