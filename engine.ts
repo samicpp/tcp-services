@@ -18,11 +18,11 @@ const TypedArray=Object.getPrototypeOf(Uint8Array.prototype).constructor;
 
 class StandardMethods{
   #on = {};
-  on(eventName: string, listener: (event: object) => void|Promise<void>):void {
+  on(eventName: string, listener: (event: any) => void|Promise<void>):void {
     if (!this.#on[eventName]) this.#on[eventName] = [];
     this.#on[eventName].push(listener);
   }
-  emit(eventName: string, obj: object) {
+  emit(eventName: string, obj: any) {
     if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
   }
 }
@@ -134,7 +134,7 @@ class Engine extends StandardMethods{
         this.#listener(this.#proxies[0][1],conn,"tcp",-1,con.remoteAddr);
       }
     } catch(err){
-      this.#emit("error",err);
+      this.emit("error",err);
     }
   }
   async proxy(port:number){
@@ -151,7 +151,7 @@ class Engine extends StandardMethods{
         this.#proxyHandler(con,then,except);
       }
     } catch(err){
-      this.#emit("error",err);
+      this.emit("error",err);
     }
   }
 
@@ -221,13 +221,13 @@ class Engine extends StandardMethods{
       //console.log(Object.getOwnPropertyDescriptors(Object.getPrototypeOf(server)));
 
 
-      let encodings=this.client.headers["accept-encoding"];
+      let encodings=this.client?.headers["accept-encoding"];
       //console.log("encodings",encodings,encodings&&encodings.includes("gzip"))
       if(encodings&&encodings.includes("gzip"))this.compress=true;
     }
     #client;
     get client(): Client|null {
-      if(this.enabled) return null;
+      if(!this.enabled) return null;
       if (this.#client) return this.#client;
       let c = new class Client {
         isValid: boolean = false;
@@ -265,6 +265,7 @@ class Engine extends StandardMethods{
         };
       } catch (err) {
         c.err = err;
+        this.emit("error",err);
       }
 
       Object.freeze(c);
@@ -313,19 +314,19 @@ class Engine extends StandardMethods{
       }
     }
     setHeader(a: string, b: string): boolean {
-      if(this.enabled)return false;
+      if(!this.enabled)return false;
       if (this.#headersSent == true) return false;
       this.#headers[a] = b;
       return true;
     }
     removeHeader(a: string): boolean{
-      if(this.enabled)return false;
+      if(!this.enabled)return false;
       if (this.#headersSent == true) return false;
       if(this.#headers[a]) return delete this.#headers[a];
       return false;
     }
     writeHead(status?: number, statusMessage?: string, headers?: object): void {
-      if(this.enabled)return;
+      if(!this.enabled)return;
       if (this.#headersSent == true) return;
       if (status) this.status = status;
       if (statusMessage) this.statusMessage = statusMessage;
@@ -340,7 +341,7 @@ class Engine extends StandardMethods{
       await this.#writeTcp(this.#te.encode("\r\n"));
     }
     async writeText(text: string): Promise<void> {
-      if(this.enabled)return;
+      if(!this.enabled)return;
       if(this.#closed)return;
       this.setHeader("Transfer-Encoding","chunked");
       let b=this.#te.encode(text);
@@ -358,7 +359,7 @@ class Engine extends StandardMethods{
       await this.#writeChunk(w);
     }
     async writeBuffer(buffer: Uint8Array): Promise<void> {
-      if(this.enabled)return;
+      if(!this.enabled)return;
       if(this.#closed)return;
       this.setHeader("Transfer-Encoding","chunked");
       let b=buffer;
@@ -376,7 +377,7 @@ class Engine extends StandardMethods{
       await this.#writeChunk(w);
     }
     async close(data?: string | ArrayBuffer): Promise<void> {
-      if(this.enabled)return;
+      if(!this.enabled)return;
       if(this.#closed)return;
       //await this.#sendHeaders(0);
       let b=data;
@@ -451,13 +452,14 @@ class Engine extends StandardMethods{
         this.#tcp,
         this.#data,
         this,
+        this.#ra,
       ];
       const http2:Http2Socket=new this.#engine.Http2Socket(...args)
-      this.#ws=ws;
-      let suc:boolean=await ws.init("http1");
+      this.#http2=http2;
+      let suc:boolean=await http2.ready;
       if(suc){
-        this.#isWebsocket=true;
-        return ws;
+        this.#upgraded=true;
+        return http2;
       }
       else return null;
     }
@@ -732,7 +734,7 @@ class Engine extends StandardMethods{
     };
   };
   #Socket2 = class Http2Socket extends StandardMethods{
-    #engine; #tcp;
+    #engine; #tcp; #ra;
     #td; #te; #data;
     #socket; #ready;
 
@@ -743,7 +745,7 @@ class Engine extends StandardMethods{
     get readSize():number{return this.#readSize};
 
 
-    constructor(engine,td,te,tcp,data,socket){
+    constructor(engine,td,te,tcp,data,socket,remoteAddr){
       super();
 
       this.#td = td;
@@ -752,6 +754,7 @@ class Engine extends StandardMethods{
       this.#data = data;
       this.#engine = engine;
       this.#socket = socket;
+      this.#ra=remoteAddr;
 
       this.#readSize=engine.readSize;
       this.updateSize();
@@ -759,6 +762,8 @@ class Engine extends StandardMethods{
 
       //try{}catch(err){this.#emit("error",err);};
     };
+    
+    get ready():Promise<boolean>{return this.#ready};
 
     #buffer=new Uint8Array(0);
     async#read():Promise<Uint8Array>{ return new Uint8Array([...this.#buffer.subarray(0,await this.#tcp.read(this.#buffer))]); };
@@ -773,6 +778,8 @@ class Engine extends StandardMethods{
         if(client.isValid){
           let upgd=client.headers["upgrade"].trim();
           //if(!upgd)throw new Error("client does not wanna upgrade");
+          let settH=client.headers["HTTP2-Settings"].trim(); // can be ignored as client will send them again.
+
 
           let res=`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n`;
 
@@ -792,7 +799,7 @@ class Engine extends StandardMethods{
 
 
 
-          if(valid)this.#listener();
+          if(valid)this.#listener(new Uint8Array([...ifr]));
           else throw new Error("invalid magic character(s)");
 
           return true;
@@ -805,13 +812,87 @@ class Engine extends StandardMethods{
       }
     };
 
-    async#listener(){
+    get ownSettings(){return this.#ownSettings} // only to make sure you only modify properties and not the object itself
+    #ownSettings:Record<string|number,number>={initial_window_size:1048576,max_header_list_size:16384};
+    async sendSettings(){
       try{
+        const settFrame=this.#frame(0,"settings",{flags:[],settings:this.ownSettings});
+        await this.#tcp.write(settFrame.buffer);
+      }catch(err) {
+        this.emit("error",err);
+        return false;
+      }
+    }
+
+    #setting={1:4096,2:0,3:-1,4:65535,5:16384,6:-1};
+    #settings:Record<number,Record<number,number>>={};
+    #flow:Record<number,number>={};
+    async#listener(first:Uint8Array){
+      try{
+        const settings=this.#settings;
+        const setting=this.#setting;
+        const flow:Record<number,number>=this.#flow;
+
+        const fframes:Http2Frame[]=[...this.#packet(first)];
+        const headers:Record<number,Record<string,string>>={};
+        const bodies:Record<number,number[]>={};
+        //const pack=await this.#read();
+        //const frames=[...this.#packet(pack)];
+        /*for(let f of fframes){
+          if(f.raw.type==4){
+            settings.push(f);
+            if(f.streamId==0)for(let si in f.settings.int)this.#setting[si]=f.settings.int[si];
+            if(f.settings.int[4])this.#flow[f.streamId]=f.settings.int[4];
+          };
+        };*/
+
+        this.sendSettings();
+
+
+        let frames:Http2Frame[]=fframes;
         while(true){
           try{
-            const pack=await this.#read();
-            const frames=[...this.#packet(pack)];
+            for(const fr of frames){
+              if(fr.raw.type!=0&&!flow[fr.streamId])flow[fr.streamId]=flow[0];
+              if(fr.raw.type==4&&fr.raw.flags==0){
+                //settings.push(fr);
+                if(fr.streamId==0)for(let si in fr.settings.int)this.#setting[si]=fr.settings.int[si];
+                else for(let si in fr.settings.int){
+                  if(!settings[fr.streamId])settings[fr.streamId]={...setting,...fr.settings.int};
+                  else for(let si in fr.settings.int)settings[fr.streamId][si]=fr.settings.int[si];
+                }
+                if(fr.settings.int[4])flow[fr.streamId]=fr.settings.int[4];
+              }else if(fr.raw.type==8){
+                let wu=fr.buffer;
+                //if(!flow[fr.streamId])flow[fr.streamId]=flow[0];
+                this.#flow[fr.streamId]+=parseInt(wu.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+              }else if(fr.raw.type==1){
+                if(!headers[fr.streamId])headers[fr.streamId]={};
+                headers[fr.streamId]={...headers[fr.streamId],...fr.headers};
 
+                if(fr.flags.includes("end_stream")){
+                  this.#respond(fr.streamId,headers[fr.streamId],bodies[fr.streamId]);
+                }
+              }else if(fr.raw.type==0){
+                if(!bodies[fr.streamId])bodies[fr.streamId]=[];
+                bodies[fr.streamId].push(...fr.buffer);
+
+                if(fr.flags.includes("end_stream")){
+                  this.#respond(fr.streamId,headers[fr.streamId],bodies[fr.streamId]);
+                }
+              };
+            };
+
+            // handle streams 
+
+
+            // loop back
+            const pack=await this.#read().catch(e=>new Uint8Array);
+            frames=[...this.#packet(pack)];
+            if(pack.length==0){
+              this.emit("close",this);
+              break;
+            };
           }catch(err){
             this.emit("error",err);
           };
@@ -819,6 +900,61 @@ class Engine extends StandardMethods{
       }catch(err){
         this.emit("error",err);
       };
+    };
+    async#respond(sid,headers,body){
+      const hand=this.#handler(sid,headers,body);
+      this.emit("stream",hand);
+    };
+    #handler(sid,headers,body){
+      const frame=(...a)=>this.#frame(...a);
+      const setting=this.#setting;
+      const settings=this.#settings;
+      const flow=this.#flow;
+      const td=this.#td;
+      const te=this.#te;
+      const tcp=this.#tcp;
+      const hpack=this.#hpack;
+      const remoteAddr=this.#ra;
+
+      const hand=new class StreamHandler{
+        #client={body,headers,remoteAddr};
+        #closed=false;
+
+        #headers:Record<string,string>={};
+        #sysHeaders:Record<string,string>={":status":"200"};
+        #sentHead=false;
+        get status():number{return parseInt(this.#sysHeaders[":status"])}
+        set status(status:number){this.#sysHeaders[":status"]=status.toString()};
+        setHeader(name:string,value:string):void{this.#headers[name.toString()]=value.toString()};
+        removeHeader(name:string):boolean{return delete this.#headers[name]};
+        #write(buff:ArrayBuffer):Promise<boolean>{return tcp.write(buff).then(r=>true).catch(e=>false);};
+        async#sendHead(){
+          if(!this.#sentHead){
+            let head=frame(sid,1,{headers:{...this.#headers,...this.#sysHeaders},flags:["end_headers"]});
+            this.#sentHead=true;
+            return await this.#write(head.buffer)
+          } else return false;
+        };
+
+        get sizeLeft(){return flow[sid]};
+
+        async write(data:string|Uint8Array){
+          if(this.#closed)return false;
+          await this.#sendHead();
+          if(data.length>this.sizeLeft)throw new Error("window size too small");
+          const dataFrame=frame(sid,"data",{data});
+          flow[sid]-=data.length;
+          return await this.#write(dataFrame.buffer);
+        };
+
+        async close(data?:string|Uint8Array){
+          if(this.#closed)return false;
+          await this.#sendHead();
+          if(data&&data.length>this.sizeLeft)throw new Error("window size too small");
+          const dat=frame(sid,"data",{flags:["end_stream"],data});
+          return await this.#write(dat.buffer);
+        }
+      }
     }
 
     #hpack=new HPACK;
@@ -886,19 +1022,23 @@ class Engine extends StandardMethods{
 
       return frameBuffer
     };
-    #frame(streamId:number,type:number|string,options?:{flags?:number|string[],data?:string|Uint8Array,headers?:Record<string,string>,settings?:Record<string|number,number>}){
+    #frame(streamId:number,type:number|string,options?:{flags?:number|string[],data?:string|Uint8Array,headers?:Record<string,string>,settings?:Record<string|number,number>,error?:{code:number,lastStreamID?:number,message?:Uint8Array|string}}){
       if(!options)options={};
 
       let flags=options?.flags||0;
       let data=options?.data||new Uint8Array;
       let headers=options?.headers||{};
       let settings=options?.settings||{};
+      let errno=options?.error?.code||0;
+      let errmsg=options?.error?.message||new Uint8Array;
+      let errsid=options?.error?.lastStreamID||0;
       
       let flagByte=parseInt(flags.toString());
       let typeByte=parseInt(type.toString());
       let heh:Uint8Array=this.#hpack.encode(Object.entries(headers));
       let settList:number[]=[];
       let settBuff:Uint8Array=new Uint8Array;
+      let errBuff:Uint8Array=new Uint8Array;
 
       if(typeof flags!="number"&&Array.isArray(flags)){
         flagByte=0;
@@ -906,7 +1046,8 @@ class Engine extends StandardMethods{
       };
       if(typeof type=="string")typeByte=this.#frameTypes.str[type];
       if(typeof data=="string")data=this.#te.encode(data);
-      for(let s in settings){
+      if(typeof errmsg=="string")errmsg=this.#te.encode(errmsg);
+      if(typeByte==4)for(let s in settings){
         let i:number,v:string[],v2:number[]=[],o:string[],o2:number[]=[];
         if(typeof s=="number")i=s;
         else i=this.#settingsList2[s];
@@ -916,7 +1057,8 @@ class Engine extends StandardMethods{
         for(let t of v)v2.push(parseInt(t,16));
         for(let t of o)o2.push(parseInt(t,16));
         settList.push(...[...v2,...o2]);
-      }
+      };
+      if(typeByte==7)errBuff=new Uint8Array([...(("00000000"+errsid.toString(16)).substring(errsid.toString(16).length).match(/.{1,2}/g)||[]).map(h=>parseInt(h,16)),...(("00"+errno.toString(16)).substring(errno.toString(16).length).match(/.{1,2}/g)||[]).map(h=>parseInt(h,16)),...errmsg]);
 
       settBuff=new Uint8Array(settList);
 
@@ -934,6 +1076,10 @@ class Engine extends StandardMethods{
             buffer: this.#frameBuffer(streamId,typeByte,flagByte,settBuff),
           };
         
+        case 7:
+          return {
+            buffer: this.#frameBuffer(streamId,typeByte,flagByte,errBuff),
+          };
         
         
         default:
@@ -976,7 +1122,7 @@ class Engine extends StandardMethods{
             streamId: streamId,
 
             buffer:new Uint8Array,
-            headers:[],
+            headers:{},
 
             error:{
               code:0,
@@ -993,14 +1139,15 @@ class Engine extends StandardMethods{
             if(frame.raw.flags & 0x04)frame.flags.push("end_headers");
             if(frame.raw.flags & 0x08)frame.flags.push("padded");
             if(frame.raw.flags & 0x20)frame.flags.push("priority");
-          } else if([4,6].includes(frame.raw.type)){
-            if(frame.raw.flags==1)frame.flags.push("ack");
-          };
+          } else if([4,6].includes(frame.raw.type)&&frame.raw.flags==1)frame.flags.push("ack");
 
           frame.buffer=new Uint8Array(frame.raw.payload);
 
-          if(frame.raw.type==1)frame.headers=hpack.decode(frame.buffer);
-          if(frame.raw.type==4){
+          if(frame.raw.type==1){
+            let entr=hpack.decode(frame.buffer);
+            for(let [k,v] of entr)frame.headers[k]=v;
+          }
+          else if(frame.raw.type==4){
             let u:number[]=frame.raw.payload;
             let set:number[][]=[];
             let lset:number[]=[];
@@ -1027,8 +1174,8 @@ class Engine extends StandardMethods{
               nvkl[name]=value;
               svkl[settingsList[name]]=value;
             }
-          };
-          if(frame.raw.type==7){
+          }
+          else if(frame.raw.type==7){
             let lastsidr=frame.buffer.subarray(0,4);
             let errnor=frame.buffer.subarray(4,8);
             let msg=frame.buffer.subarray(8);
@@ -1064,7 +1211,7 @@ class Engine extends StandardMethods{
     //console.log('incoming connection',conn);
     let err=null;
     const length = await conn.read(dat).catch(e=>err=e);
-    if(typeof length!="number"||length<=0)return this.emit("null data", {conn,length,err});
+    if(typeof length!="number"||length<=0)return this.emit("nulldata", {conn,length,err});
     const data = dat.slice(0, length);
 
     if(false/*&&cache.upgrade&&data[0]==22*/){

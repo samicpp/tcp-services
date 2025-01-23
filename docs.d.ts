@@ -1,11 +1,39 @@
 // engine.ts
+
+/**
+ * Some standard methods for classes.
+ */
+interface StandardMethods{
+    /**
+     * Listens to a specific event.
+     * 
+     * @param name Name of the event.
+     * @param listener Function that listens to the event.
+     */
+    on(name:string,listener:(any)=>void|Promise<void>):void;
+
+    /**
+     * Emits an event.
+     * Heres a list of possible events:
+     * 
+     * @param name Event name.
+     * @param object Event object wich listeners will be invoked with.
+     * 
+     * @event error Event which will be triggered when anything went wrong.
+     * @event nulldata Unique to Engine. Triggered when client didn't send any data.
+     * @event frame Unique to WebSocket. Triggered when client sends a web socket frame
+     * 
+     */
+    emit(name:string,object:HttpSocket|Http2Socket|WsFrame|any):void;
+}
+
 /**
  * Engine: The main server interface for managing TCP, HTTP, and WebSocket connections.
  * 
  * Note: Properties or methods marked as `should not be used` are intended 
  * only for internal API use or modifications and should be avoided in normal scenarios.
  */
-interface Engine {
+interface Engine extends StandardMethods{
     /**
      * The address the server will listen on (e.g., `0.0.0.0` for all available interfaces).
      */
@@ -54,8 +82,10 @@ interface Engine {
      * 
      * @param event The name of the event to listen for.
      * @param listener The callback function to invoke with event data.
+     * 
+     * on(event: 'connection', listener: (data: HttpSocket | any) => void): void;
      */
-    on(event: 'connection', listener: (data: HttpSocket | any) => void): void;
+    
 
     /**
      * Internal HTTPSocket class reference.
@@ -85,7 +115,7 @@ interface TlsOptions{
 /**
  * HTTPSocket: Represents a single client connection, providing HTTP request and response handling.
  */
-interface HttpSocket {
+interface HttpSocket extends StandardMethods {
     /**
      * Internal TCP connection for the client.
      * @internal This property should not be accessed directly.
@@ -383,9 +413,12 @@ interface WsFrame {
      * @property Code contains the closing code.
      * @property Message contains the closing message.
      */
-    readonly close: { code:number, message:Uint8Array};
+    readonly close: { readonly code:number, readonly message:Uint8Array};
 }
 
+/**
+ * Used for HTTP2
+ */
 interface Http2Socket{
     /**
      * The maximum number of bytes to read per tcp packet.
@@ -398,6 +431,21 @@ interface Http2Socket{
     updateSize(size?: number): void;
 
     /**
+     * Returns a promise which will be fullfilled when the socket is ready. Will be fullfilled with false if anything went wrong.
+     */
+    readonly ready:Promise<boolean>;
+
+    /**
+     * In here you can set and modify the settings for the whole connection of the server.
+     */
+    ownSettings:Record<string|number,number>;
+
+    /**
+     * Sends the servers settings for the whole connection.
+     */
+    sendSettings():Promise<void>;
+
+    /**
      * Listens for a specific event
      * 
      * Used events:
@@ -406,55 +454,58 @@ interface Http2Socket{
     on(event: string, listener: (event:any|unknown)=>void|Promise<void>);
 }
 
+/**
+ * Used for HTTP2
+ */
 interface Http2Frame{
     /**
      * A collection of properties used for processing. Under normal circumstances shouldn't be used.
      */
-    raw:{
-      length: number[],
-      type: number,
-      flags: number,
-      stream: number[],
-      payload: number[],
+    readonly raw:{
+        readonly length: number[],
+        readonly type: number,
+        readonly flags: number,
+        readonly stream: number[],
+        readonly payload: number[],
     },
 
     /**
      * The type of the frame stored as string
      */
-    type: string,
+    readonly type: string,
 
     /**
      * The frame flags as strings.
      */
-    flags: string[],
+    readonly flags: string[],
 
     /**
      * The payload length
      */
-    length: number,
+    readonly length: number,
 
     /**
      * The frame's stream ID.
      */
-    streamId: number,
+    readonly streamId: number,
 
     /**
      * The frames payload as buffer. When the frame is of type settings or headers it shouldn't be used.
      */
-    buffer:Uint8Array,
+    readonly buffer:Uint8Array,
 
     /**
      * The headers sent by the frame if applicable.
      */
-    headers:number[],
+    readonly headers:Record<string,string>,
 
     /**
      * Containts the error code, target stream ID and optional message if applicable
      */
-    error:{
-        streamId:number;
-        code:number;
-        message:Uint8Array;
+    readonly error:{
+        readonly streamId:number;
+        readonly code:number;
+        readonly message:Uint8Array;
     };
 
     /**
@@ -463,7 +514,39 @@ interface Http2Frame{
      * @property str An object with the settings where the property is the string form of the setting.
      * @property int An object with the settings where the property is the integer form of the setting.
      */
-    settings:{str:Record<string,number>,int:Record<number,number>},
+    readonly settings:{readonly str:Record<string,number>,readonly int:Record<number,number>},
+}
+
+interface Http2Stream{
+    /**
+     * Status to be sent.
+     */
+    status:number;
+
+    /**
+     * Sets a single header.
+     */
+    setHeader(name:string,value:string):void;
+
+    /**
+     * Removes a single header.
+     */
+    removeHeader(name:string,value:string):void;
+
+    /**
+     * Indicates the window size, so how much data can still be written. Used for flow control.
+     */
+    readonly sizeLeft:number;
+
+    /**
+     * Sends a data frame to the client and sends the headers.
+     */
+    write(data:string|Uint8Array):Promise<boolean>;
+
+    /**
+     * Sends a data frame to the client with an end stream flag and sends the headers.
+     */
+    close(data:string|Uint8Array):Promise<boolean>;
 }
 
 /**

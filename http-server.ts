@@ -52,6 +52,8 @@ const readfText=g=>readf(g).then(b=>td.decode(b));
 
 
 export async function listener({socket,client}: HttpSocket){
+    socket.on("error",console.error);
+    //console.log(socket.enabled);
     let proxied=false;
     let isValid=client.isValid;
     /*if(!client.isValid){

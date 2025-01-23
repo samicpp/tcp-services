@@ -142,7 +142,7 @@ tcp.proxied=true;
 tcp.intTlsOpt=tlsopt;
 for(let dport of dports)tcp.proxy(parseInt(dport));
 tcp.on("connect",http.listener);
-tcp.on("null data",e=>logsole.log("no data"));
+tcp.on("nulldata",e=>logsole.log("no data"));
 tcp.on("error",e=>logsole.error(e));
 
 logsole.log('pid: ',deno.pid);
