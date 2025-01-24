@@ -18,6 +18,12 @@ engine.on("connect",async function({socket,client}: HttpSocket): Promise<void>{
         if(!h2c)return socket.deny();
 
         h2cHandler(h2c);
+    } else if(client.headers.upgrade?.includes("websocket")){
+        const ws=await socket.websocket();
+        console.log(ws,socket);
+        if(!ws)return socket.close();
+
+        ws.on("frame",async(f:WsFrame)=>{ws.sendText(`${f.opcode}: ${new TextDecoder().decode(f.payload)}`)});
     } else {
         if(client.path=="/"){
             socket.close("Hello, world!");
@@ -32,10 +38,11 @@ async function h2cHandler(h2c:Http2Socket){
     h2c.on("stream",async function(stream:Http2Stream){
         console.log(stream);
 
+        //stream.status=200;
         stream.setHeader("content-type","text/plain");
         await stream.close("Hello, world!");
     });
-    h2c.on("close",console.warn);
+    h2c.on("close",c=>console.warn(c));
 }
 engine.on("error",console.error);
 engine.start();

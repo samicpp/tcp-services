@@ -972,11 +972,18 @@ class Engine extends StandardMethods{
         setHeader(name:string,value:string):void{this.#headers[name.toString()]=value.toString()};
         removeHeader(name:string):boolean{return delete this.#headers[name]};
         #write(buff:ArrayBuffer):Promise<boolean>{return tcp.write(buff).then(r=>true).catch(e=>false);};
-        async#sendHead(){
+        #getHeadBuff(end:boolean){
+          this.#sysHeaders.date=new Date().toString();
+          this.#sysHeaders.vary="Accept-Encoding";
+          let head;
+          if(!end)head=frame(sid,1,{headers:{...this.#sysHeaders,...this.#headers},flags:["end_headers"]});
+          else head=frame(sid,1,{headers:{...this.#sysHeaders,...this.#headers},flags:["end_headers","end_stream"]});
+          return head;
+        }
+        async#sendHead(end?:boolean){
           if(!this.#sentHead){
-            let head=frame(sid,1,{headers:{...this.#headers,...this.#sysHeaders},flags:["end_headers"]});
-            this.#sentHead=true;
-            return await this.#write(head.buffer)
+            const head=this.#getHeadBuff(!!end);
+            return await this.#write(head.buffer);
           } else return false;
         };
 
@@ -993,10 +1000,18 @@ class Engine extends StandardMethods{
 
         async close(data?:string|Uint8Array){
           if(this.#closed)return false;
-          await this.#sendHead();
           if(data&&data.length>this.sizeLeft)throw new Error("window size too small");
-          const dat=frame(sid,"data",{flags:["end_stream"],data});
-          return await this.#write(dat.buffer);
+          if(!data)return await this.#sendHead(true);
+          //else await this.#sendHead();
+          else if(!this.#sentHead){
+            this.#sysHeaders["content-length"]=data.length.toString();
+            const h=this.#getHeadBuff(false).buffer;
+            const dat=frame(sid,"data",{flags:["end_stream"],data}).buffer;
+            return await this.#write(new Uint8Array([...h,...dat]));
+          }else{
+            const dat=frame(sid,"data",{flags:["end_stream"],data});
+            return await this.#write(dat.buffer);
+          }
         }
       };
       return hand;

@@ -25,6 +25,7 @@ interface StandardMethods{
      * @event connection Unique to Engine. Triggered when a client sends a HTTP request. Dispatched with `HttpSocket`.
      * @event stream Unique to Http2Socket. Triggered when a client has sent sufficient frames for a server response. Dispatched with `Http2Stream`.
      * @event close Unique to Http2Socket. Triggered when a client has sent a goaway frame. Dispatched with `Http2Frame`.
+     * @event closed Unique to Http2Socket. Triggered when connection has closed. Dispatched with `Http2Socket`.
      * @event http2 Unique to Engine. Triggered when a client sends a http2 request without a http1 upgrade request first. Dispatched with `Http2Socket`.
      */
     emit(name:string,object:HttpSocket|Http2Stream|Http2Socket|Http2Frame|WsFrame|Error|any):void;
