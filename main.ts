@@ -144,6 +144,9 @@ for(let dport of dports)tcp.proxy(parseInt(dport));
 tcp.on("connect",http.listener);
 tcp.on("nulldata",e=>logsole.log("no data"));
 tcp.on("error",e=>logsole.error(e));
+// http2, should also make it a cli option
+tcp.on("http2",http.listener2);
+tcp.upgrade=true;
 
 logsole.log('pid: ',deno.pid);
 await deno.writeTextFile("last-pid.txt", deno.pid);

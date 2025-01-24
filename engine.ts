@@ -23,6 +23,7 @@ class StandardMethods{
     this.#on[eventName].push(listener);
   }
   emit(eventName: string, obj: any) {
+    //console.log(eventName,obj);
     if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
   }
 }
@@ -860,9 +861,15 @@ class Engine extends StandardMethods{
       }
     }
 
-    #setting={1:4096,2:0,3:-1,4:65535,5:16384,6:-1};
+    get pushEnabled():boolean{return !!this.#setting[2]};
+    //get#pushEnabled():boolean{return !!this.#setting[2]};
+
+    #setting={1:4096,2:0,3:0xff_ff_ff_ff,4:65535,5:16384,6:-1};
+    get mainIntSettings(){return {...this.#setting}};
+    getIntSettings(sid:number){return {...this.#settings[sid]}};
     #settings:Record<number,Record<number,number>>={};
     #flow:Record<number,number>={};
+    #usedSids:number[]=[0];
     async#listener(first:Uint8Array){
       try{
         const settings=this.#settings;
@@ -889,6 +896,7 @@ class Engine extends StandardMethods{
         while(true){
           try{
             for(const fr of frames){
+              if(!this.#usedSids.includes(fr.streamId))this.#usedSids.push(fr.streamId);
               if(fr.raw.type!=0&&!flow[fr.streamId])flow[fr.streamId]=flow[0];
               if(fr.raw.type==4&&fr.raw.flags==0){
                 //settings.push(fr);
@@ -908,19 +916,22 @@ class Engine extends StandardMethods{
                 headers[fr.streamId]={...headers[fr.streamId],...fr.headers};
 
                 if(fr.flags.includes("end_stream")){
-                  this.#respond(fr.streamId,headers[fr.streamId],bodies[fr.streamId]);
+                  this.#respond(fr.streamId,headers,bodies);
                 }
               }else if(fr.raw.type==0){
                 if(!bodies[fr.streamId])bodies[fr.streamId]=[];
                 bodies[fr.streamId].push(...fr.buffer);
 
                 if(fr.flags.includes("end_stream")){
-                  this.#respond(fr.streamId,headers[fr.streamId],bodies[fr.streamId]);
+                  this.#respond(fr.streamId,headers,bodies);
                 }
               }else if(fr.raw.type==7){
                 await this.#tcp.write(this.#frame(fr.streamId,7,{flags:["ack"]})).catch(e=>e);
                 this.emit("close",fr);
                 this.#tcp.close();
+              }else if(fr.raw.type==3){
+                flow[fr.streamId]=flow[0];
+                this.#usedSids.splice(this.#usedSids.indexOf(fr.streamId),1);
               };
             };
 
@@ -942,8 +953,10 @@ class Engine extends StandardMethods{
         this.emit("error",err);
       };
     };
-    async#respond(sid,headers,body){
-      const hand=this.#handler(sid,headers,body);
+    async#respond(sid,headers,bodies){
+      const hand=this.#handler(sid,headers[sid],bodies[sid]);
+      headers[sid]={};
+      bodies[sid]=[];
       this.emit("stream",hand);
     };
     #handler(sid,headers,body):Http2Stream{
@@ -956,6 +969,8 @@ class Engine extends StandardMethods{
       const tcp=this.#tcp;
       const hpack=this.#hpack;
       const remoteAddr=this.#ra;
+      const http2=this;
+      const usedSids=this.#usedSids;
 
       const hand=new class StreamHandler{
         #client={body,headers,remoteAddr};
@@ -971,13 +986,21 @@ class Engine extends StandardMethods{
         set status(status:number){this.#sysHeaders[":status"]=status.toString()};
         setHeader(name:string,value:string):void{this.#headers[name.toString()]=value.toString()};
         removeHeader(name:string):boolean{return delete this.#headers[name]};
+        async reset():Promise<boolean>{
+          let suc=await tcp.write(frame(sid,3,{data:"\x00\x00\x00\x00"}).buffer)//.then(r=>r?this.#closed=true:false)
+          if(suc){
+            this.#closed=true;
+            usedSids.splice(usedSids.indexOf(sid),1);
+            return true;
+          } else return false
+        };
         #write(buff:ArrayBuffer):Promise<boolean>{return tcp.write(buff).then(r=>true).catch(e=>false);};
         #getHeadBuff(end:boolean){
           this.#sysHeaders.date=new Date().toString();
           this.#sysHeaders.vary="Accept-Encoding";
           let head;
-          if(!end)head=frame(sid,1,{headers:{...this.#sysHeaders,...this.#headers},flags:["end_headers"]});
-          else head=frame(sid,1,{headers:{...this.#sysHeaders,...this.#headers},flags:["end_headers","end_stream"]});
+          if(!end)head=frame(sid,1,{headers:{":status":this.#sysHeaders[":status"],...this.#headers,...this.#sysHeaders},flags:["end_headers"]});  // sys headers last to overule any simulated user headers such as `:status`
+          else head=frame(sid,1,{headers:{":status":this.#sysHeaders[":status"],...this.#headers,...this.#sysHeaders},flags:["end_headers","end_stream"]});
           return head;
         }
         async#sendHead(end?:boolean){
@@ -1012,6 +1035,31 @@ class Engine extends StandardMethods{
             const dat=frame(sid,"data",{flags:["end_stream"],data});
             return await this.#write(dat.buffer);
           }
+        };
+
+        async push(req:Record<string,string>,headers:Record<string,string>,data:string|Uint8Array):Promise<boolean>{
+          if(!http2.pushEnabled)return false;
+          let max=http2.mainIntSettings[3];
+          if(max>300)max=300;
+          let nsid:number=-1;
+          for(let i=0,rsid=Math.round(Math.random()*max);i<5;i++){
+            if(!usedSids.includes(rsid)){
+              nsid=rsid;
+              break;
+            }
+          };
+          if(nsid==-1)return false;
+          //let sidb=(nsid.toString(16).padStart(8,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16));
+          let pf=frame(sid,5,{flags:["end_headers"],targetStreamId:nsid,headers:req}).buffer;
+          let hf=frame(nsid,1,{flags:["end_headers"],headers}).buffer;
+          let df=frame(nsid,0,{flags:["end_headers"],data}).buffer;
+          let jf=new Uint8Array([...pf,...hf,...df]);
+          let suc=await this.#write(jf);
+          return suc;
+        };
+
+        async pseudo(){ // future
+          ;
         }
       };
       return hand;
@@ -1052,6 +1100,7 @@ class Engine extends StandardMethods{
       if(payload.length>0xffffff)throw new Error("payload size too big");
       if(flags>0xff)throw new Error("flags too big");
 
+      //console.log(arguments);
       const frameBuffer=new Uint8Array(9+payload.length);
 
       let flagByte=parseInt(flags.toString());
@@ -1062,17 +1111,19 @@ class Engine extends StandardMethods{
       };*/
       //if(typeof type=="string")typeByte=this.#frameTypes.str[type];
 
-      let hl=payload.length.toString(16);
+      /*let hl=payload.length.toString(16);
       let hlfa=("000000"+hl).substring(hl.length).split("");
       let hll="";
       let hlb:number[]=[];
-      for(let i in hlfa)i%2?hlb.push(parseInt(hll+hlfa[i],16)):hll=hlfa[i];
+      for(let i in hlfa)i%2?hlb.push(parseInt(hll+hlfa[i],16)):hll=hlfa[i];*/
+      let hlb=(payload.length.toString(16).padStart(6,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16));
       
-      let hsi=streamId.toString(16);
+      /*let hsi=streamId.toString(16);
       let hsifa=("00000000"+hsi).substring(hsi.length).split("");
       let hsil="";
       let hsib:number[]=[];
-      for(let i in hsifa)i%2?hsib.push(parseInt(hsil+hsifa[i],16)):hsil=hsifa[i];
+      for(let i in hsifa)i%2?hsib.push(parseInt(hsil+hsifa[i],16)):hsil=hsifa[i];*/
+      let hsib=(streamId.toString(16).padStart(8,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16));
 
       const part=new Uint8Array([...hlb,typeByte,flagByte,...hsib]);
       frameBuffer.set(part);
@@ -1082,7 +1133,7 @@ class Engine extends StandardMethods{
 
       return frameBuffer
     };
-    #frame(streamId:number,type:number|string,options?:{flags?:number|string[],data?:string|Uint8Array,headers?:Record<string,string>,settings?:Record<string|number,number>,error?:{code:number,lastStreamID?:number,message?:Uint8Array|string}}){
+    #frame(streamId:number,type:number|string,options?:{flags?:number|string[],data?:string|Uint8Array,headers?:Record<string,string>,settings?:Record<string|number,number>,error?:{code:number,lastStreamID?:number,message?:Uint8Array|string},targetStreamId?:number}){
       if(!options)options={};
 
       let flags=options?.flags||0;
@@ -1092,6 +1143,7 @@ class Engine extends StandardMethods{
       let errno=options?.error?.code||0;
       let errmsg=options?.error?.message||new Uint8Array;
       let errsid=options?.error?.lastStreamID||0;
+      let tarsid=options?.targetStreamId||Math.floor(Math.random()*0xffff);
       
       let flagByte=parseInt(flags.toString());
       let typeByte=parseInt(type.toString());
@@ -1099,6 +1151,8 @@ class Engine extends StandardMethods{
       let settList:number[]=[];
       let settBuff:Uint8Array=new Uint8Array;
       let errBuff:Uint8Array=new Uint8Array;
+      let tsidBuff:number[]=(tarsid.toString(16).padStart(8,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16));
+      //let pushBuff=new Uint8Array;
 
       if(typeof flags!="number"&&Array.isArray(flags)){
         flagByte=0;
@@ -1119,7 +1173,7 @@ class Engine extends StandardMethods{
         for(let t of o)o2.push(parseInt(t,16));
         settList.push(...[...v2,...o2]);
       };
-      if(typeByte==7)errBuff=new Uint8Array([...(("00000000"+errsid.toString(16)).substring(errsid.toString(16).length).match(/.{1,2}/g)||[]).map(h=>parseInt(h,16)),...(("00"+errno.toString(16)).substring(errno.toString(16).length).match(/.{1,2}/g)||[]).map(h=>parseInt(h,16)),...errmsg]);
+      if(typeByte==7)errBuff=new Uint8Array([...(errsid.toString(16).padStart(8,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16)),...(errno.toString(16).padStart(2,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16)),...errmsg]);
 
       settBuff=new Uint8Array(settList);
 
@@ -1132,6 +1186,11 @@ class Engine extends StandardMethods{
             buffer: this.#frameBuffer(streamId,typeByte,flagByte,heh),
           };
         
+        case 3:
+          return {
+            buffer: this.#frameBuffer(streamId,typeByte,flagByte,new Uint8Array([...tsidBuff,...heh])),
+          };
+
         case 4:
           return {
             buffer: this.#frameBuffer(streamId,typeByte,flagByte,settBuff),
@@ -1163,8 +1222,8 @@ class Engine extends StandardMethods{
           if(buff.length<9)return[{},new Uint8Array()];
           const length=[...buff.subarray(0,3)];
           const stream=[...buff.subarray(5,9)];
-          const lenInt=parseInt(length.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
-          const streamId=parseInt(stream.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+          const lenInt=parseInt(length.map(v=>v.toString(16).padStart(2,"0")).join(''),16);
+          const streamId=parseInt(stream.map(v=>v.toString(16).padStart(2,"0")).join(''),16);
 
           const svkl:Record<string,number>={};
           const nvkl:Record<number,number>={};
@@ -1237,16 +1296,19 @@ class Engine extends StandardMethods{
             }
           }
           else if(frame.raw.type==7){
-            let lastsidr=frame.buffer.subarray(0,4);
-            let errnor=frame.buffer.subarray(4,8);
-            let msg=frame.buffer.subarray(8);
+            let lastsidr=[...frame.buffer.subarray(0,4)];
+            let errnor=[...frame.buffer.subarray(4,8)];
+            let msg=[...frame.buffer.subarray(8)];
 
-            let lastsid=parseInt(lastsidr.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
-            let errno=parseInt(errnor.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+            let lastsid=parseInt(lastsidr.map(v=>v.toString(16).padStart(2,"0")).join(''),16);
+            let errno=parseInt(errnor.map(v=>v.toString(16).padStart(2,"0")).join(''),16);
             
             frame.error.code=errno;
             frame.error.streamId=lastsid;
             frame.error.message=new Uint8Array([...msg]);
+          }
+          else if(frame.raw.type==3){
+            frame.error.code=parseInt(frame.raw.payload.map(v=>v.toString(16).padStart(2,"0")).join(''),16);
           };
 
           let remain=buff.subarray(9+lenInt);
@@ -1264,6 +1326,7 @@ class Engine extends StandardMethods{
   };
 
   async #listener(server, conn:Deno.Conn, type:string, cacheId: number, remoteAddr=conn.remoteAddr): Promise<void> {
+    //console.log("connection",remoteAddr);
     //conn.accept();
     const encoder = this.#te;
     const decoder = this.#td;

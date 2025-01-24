@@ -72,10 +72,10 @@ This is a list of things i might implement in the future.
 - [x] Make todo list.
 
 ## engine.ts
- - [ ] Full HTTP/2 support (not just translation).
  - [ ] Fix client data reading.
  - [ ] ~~Full HTTP/3 support~~ (no reliable UDP related methods in deno yet).
  - [ ] Store system headers (things like `Content-Length`) separate from user configurable headers.
+ - [x] Full HTTP/2 support (not just translation).
 
 ## http-server.ts
 - [ ] Support FFI and WASM dynamic files.

@@ -458,6 +458,11 @@ interface Http2Socket extends StandardMethods{
     sendSettings():Promise<void>;
 
     /**
+     * Is true when client allows server push (aka PROMISE_PUSH).
+     */
+    readonly pushEnabled:boolean;
+
+    /**
      * Listens for a specific event
      * 
      * Used events:
@@ -533,6 +538,19 @@ interface Http2Frame{
      * @property int An object with the settings where the property is the integer form of the setting.
      */
     readonly settings:{readonly str:Record<string,number>,readonly int:Record<number,number>},
+
+    /**
+     * Performs a PUSH_PROMISE. Resolves with true if successful. If not, false.
+     * @param requestHeaders The request headers needed for PUSH_PROMISE
+     * @param headers The response headers of the server push
+     * @param data The content in the server push
+     */
+    push(requestHeaders:Record<string,string>,headers:Record<string,string>,data:string|Uint8Array):Promise<boolean>;
+
+    /**
+     * Resets the stream. Resolves with true if successful.
+     */
+    reset():Promise<boolean>;
 }
 
 /**
@@ -568,6 +586,11 @@ interface Http2Stream{
      * Sends a data frame to the client with an end stream flag and sends the headers.
      */
     close(data:string|Uint8Array):Promise<boolean>;
+
+    /**
+     * Returns object with similar methods to HttpSocket. Used for backwards compatibility. Not yet implemented
+     */
+    pseudo():unknown;
 }
 
 /**
