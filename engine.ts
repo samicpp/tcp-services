@@ -1,5 +1,5 @@
 import * as compress from "jsr:@deno-library/compress";
-import docs from "./docs.d.ts";
+import "./docs.d.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.97.0/encoding/base64.ts";
 import { createHash } from "https://deno.land/std@0.97.0/hash/mod.ts";
 import HPACK from "npm:hpack";
@@ -441,11 +441,46 @@ class Engine extends StandardMethods{
     #http2:Http2Socket;
     async http2(){
       if(this.#closed)return null;
-      if(this.#ws)return this.#ws;
+      if(this.#http2)return this.#http2;
       if(!this.enabled)return null;
 
 
-      const args=[
+      if(this.#client.isValid){
+        let upgd=this.#client.headers["upgrade"]?.trim();
+        //if(!upgd)throw new Error("client does not wanna upgrade");
+        let settH=this.#client.headers["http2-settings"]?.trim(); // can be ignored as client will send them again.
+
+
+        let res=`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n`;
+
+        await this.#tcp.write(this.#te.encode(res)).catch(e=>e);
+          
+
+        const args=[
+          this.#engine,
+          this.#td,
+          this.#te,
+          this.#tcp,
+          this.#data,
+          this,
+          this.#type,
+          this.#ra,
+        ];
+        const http2:Http2Socket=new this.#engine.Http2Socket(...args);
+        this.#http2=http2;
+
+        let suc:boolean=await http2.ready;
+        if(suc){
+          this.#upgraded=true;
+          return http2;
+        }
+        else return null;
+        
+      } else {
+        this.emit("error",new Error("client is not valid"));
+        return null
+      }
+      /*const args=[
         this.#engine,
         this.#td,
         this.#te,
@@ -462,7 +497,7 @@ class Engine extends StandardMethods{
         this.#upgraded=true;
         return http2;
       }
-      else return null;
+      else return null;*/
     }
     //set isWebSocket(iws:boolean){if(iws)this.websocket();}
   };
@@ -736,7 +771,7 @@ class Engine extends StandardMethods{
   };
   #Socket2 = class Http2Socket extends StandardMethods{
     #engine; #tcp; #ra;
-    #td; #te; #data;
+    #td; #te; #data; #type;
     #socket; #ready;
 
     #readSize = 1024 * 10;
@@ -746,20 +781,21 @@ class Engine extends StandardMethods{
     get readSize():number{return this.#readSize};
 
 
-    constructor(engine,td,te,tcp,data,socket,remoteAddr){
+    constructor(engine,td,te,tcp,data,socket,type,remoteAddr){
       super();
 
       this.#td = td;
       this.#te = te;
       this.#tcp = tcp;
       this.#data = data;
+      this.#type = type;
       this.#engine = engine;
       this.#socket = socket;
-      this.#ra=remoteAddr;
+      this.#ra = remoteAddr;
 
       this.#readSize=engine.readSize;
       this.updateSize();
-      this.#ready=this.#init();
+      this.#ready=this.#init(socket?null:data);
 
       //try{}catch(err){this.#emit("error",err);};
     };
@@ -771,42 +807,41 @@ class Engine extends StandardMethods{
     updateSize(size?:number):void { this.#buffer=new Uint8Array(this.#readSize=size||this.#readSize); };
     //async init(){} // not applicable
     #magic="PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+    static get magic(){return "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"};
+    static get magicBuffer(){return new Uint8Array([80,82,73,32,42,32,72,84,84,80,47,50,46,48,13,10,13,10,83,77,13,10,13,10])};
     //#magicBuffer=new Uint8Array([80,82,73,32,42,32,72,84,84,80,47,50,46,48,13,10,13,10,83,77,13,10,13,10]);
     #magicASCII="80,82,73,32,42,32,72,84,84,80,47,50,46,48,13,10,13,10,83,77,13,10,13,10";
-    async#init(){
+    async#init(firstData?:Uint8Array|null){
       try{
-        let client:Client=this.#socket.client;
-        if(client.isValid){
-          let upgd=client.headers["upgrade"]?.trim();
+        
+          /*let upgd=client.headers["upgrade"]?.trim();
           //if(!upgd)throw new Error("client does not wanna upgrade");
           let settH=client.headers["http2-settings"]?.trim(); // can be ignored as client will send them again.
 
 
           let res=`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n`;
 
-          await this.#tcp.write(this.#te.encode(res)).catch(e=>e);
+          await this.#tcp.write(this.#te.encode(res)).catch(e=>e);*/
             
 
-          let valid=false;
-          let first,ifr;
-          try{
-            first=await this.#read();
-            const mc=first.subarray(0,this.#magic.length);
-            ifr=first.subarray(this.#magic.length);
-            if(mc==this.#magicASCII)valid=true;
-          }catch(err){
-            this.emit("error",err);
-          };
+        let valid=false;
+        let first,ifr;
+        try{
+          first=firstData||await this.#read();
+          const mc=first.subarray(0,this.#magic.length);
+          ifr=first.subarray(this.#magic.length);
+          if(mc==this.#magicASCII)valid=true;
+        }catch(err){
+          this.emit("error",err);
+        };
 
 
 
-          if(valid)this.#listener(new Uint8Array([...ifr]));
-          else throw new Error("invalid magic character(s)");
+        if(valid)this.#listener(new Uint8Array([...ifr]));
+        else throw new Error("invalid magic character(s)");
 
-          return true;
-        } else {
-          throw new Error("client is not valid");
-        }
+        return true;
+        
       } catch(err) {
         this.emit("error",err);
         return false;
@@ -882,6 +917,10 @@ class Engine extends StandardMethods{
                 if(fr.flags.includes("end_stream")){
                   this.#respond(fr.streamId,headers[fr.streamId],bodies[fr.streamId]);
                 }
+              }else if(fr.raw.type==7){
+                await this.#tcp.write(this.#frame(fr.streamId,7,{flags:["ack"]})).catch(e=>e);
+                this.emit("close",fr);
+                this.#tcp.close();
               };
             };
 
@@ -907,7 +946,7 @@ class Engine extends StandardMethods{
       const hand=this.#handler(sid,headers,body);
       this.emit("stream",hand);
     };
-    #handler(sid,headers,body){
+    #handler(sid,headers,body):Http2Stream{
       const frame=(...a)=>this.#frame(...a);
       const setting=this.#setting;
       const settings=this.#settings;
@@ -959,7 +998,8 @@ class Engine extends StandardMethods{
           const dat=frame(sid,"data",{flags:["end_stream"],data});
           return await this.#write(dat.buffer);
         }
-      }
+      };
+      return hand;
     }
 
     #hpack=new HPACK;
@@ -1053,12 +1093,13 @@ class Engine extends StandardMethods{
       if(typeof data=="string")data=this.#te.encode(data);
       if(typeof errmsg=="string")errmsg=this.#te.encode(errmsg);
       if(typeByte==4)for(let s in settings){
-        let i:number,v:string[],v2:number[]=[],o:string[],o2:number[]=[];
+        let i:number,sv:number,v:string[],v2:number[]=[],o:string[],o2:number[]=[];
+        sv=parseInt(settings[s].toString());
         if(typeof s=="number")i=s;
         else i=this.#settingsList2[s];
         if(!i)continue;
-        v=("000"+i.toString(16)).substring(i.toString(16).length).match(/.{1,2}/g)||[];
-        o=("0000000"+i.toString(16)).substring(i.toString(16).length).match(/.{1,2}/g)||[];
+        v=("0000"+i.toString(16)).substring(i.toString(16).length).match(/.{1,2}/g)||[];
+        o=("00000000"+sv.toString(16)).substring(sv.toString(16).length).match(/.{1,2}/g)||[];
         for(let t of v)v2.push(parseInt(t,16));
         for(let t of o)o2.push(parseInt(t,16));
         settList.push(...[...v2,...o2]);
@@ -1244,6 +1285,11 @@ class Engine extends StandardMethods{
       */
     }
     //console.log(data);
+    if(this.upgrade&&this.#Socket2.magicBuffer.every((v,i)=>data[i]==v)){
+      // http2
+      const socket = new this.#Socket2(this,decoder, encoder, conn, data, null, type, remoteAddr);
+      this.emit("http2", socket);
+    }
     else{
       const socket = new this.#Socket(this,decoder, encoder, conn, server, data, type, remoteAddr);
       this.emit("connect", socket);

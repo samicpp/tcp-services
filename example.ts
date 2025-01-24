@@ -1,8 +1,10 @@
 import Engine from "./engine.ts";
+import "./docs.d.ts";
 
 const engine: Engine=new Engine();
 engine.port=80;
 engine.host="0.0.0.0";
+engine.upgrade=true;
 engine.on("connect",async function({socket,client}: HttpSocket): Promise<void>{
     console.log(client);
 
@@ -15,19 +17,28 @@ engine.on("connect",async function({socket,client}: HttpSocket): Promise<void>{
         console.log(h2c,socket);
         if(!h2c)return socket.deny();
 
-        h2c.on("error",console.error);
-        h2c.on("stream",async function(stream:Http2Stream){
-            console.log(stream);
-
-            stream.setHeader("content-type","text/plain");
-            await stream.close("Hello, world!");
-        })
+        h2cHandler(h2c);
     } else {
         if(client.path=="/"){
             socket.close("Hello, world!");
         }
     }
 });
+engine.on("http2",h2cHandler);
+async function h2cHandler(h2c:Http2Socket){
+    let r=await h2c.ready;
+    console.log("h2c",r);
+    h2c.on("error",console.error);
+    h2c.on("stream",async function(stream:Http2Stream){
+        console.log(stream);
+
+        stream.setHeader("content-type","text/plain");
+        await stream.close("Hello, world!");
+    });
+    h2c.on("close",console.warn);
+}
 engine.on("error",console.error);
 engine.start();
 console.log("listening");
+
+globalThis.engine=engine;

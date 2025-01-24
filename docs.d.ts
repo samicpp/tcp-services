@@ -10,7 +10,7 @@ interface StandardMethods{
      * @param name Name of the event.
      * @param listener Function that listens to the event.
      */
-    on(name:string,listener:(any)=>void|Promise<void>):void;
+    on(name:string,listener:(event:HttpSocket|Http2Stream|Http2Socket|WsFrame|Error|any)=>void|Promise<void>):void;
 
     /**
      * Emits an event.
@@ -23,9 +23,11 @@ interface StandardMethods{
      * @event nulldata Unique to Engine. Triggered when client didn't send any data.
      * @event frame Unique to WebSocket. Triggered when client sends a web socket frame. Dispatched with `WsFrame`.
      * @event connection Unique to Engine. Triggered when a client sends a HTTP request. Dispatched with `HttpSocket`.
-     * @event stream Unique to Http2Socket. Triggered when a client has sent sufficient frames for a server response. Dispatched with `Http2Stream`
+     * @event stream Unique to Http2Socket. Triggered when a client has sent sufficient frames for a server response. Dispatched with `Http2Stream`.
+     * @event close Unique to Http2Socket. Triggered when a client has sent a goaway frame. Dispatched with `Http2Frame`.
+     * @event http2 Unique to Engine. Triggered when a client sends a http2 request without a http1 upgrade request first. Dispatched with `Http2Socket`.
      */
-    emit(name:string,object:HttpSocket|Http2Stream|WsFrame|any):void;
+    emit(name:string,object:HttpSocket|Http2Stream|Http2Socket|Http2Frame|WsFrame|Error|any):void;
 }
 
 /**
@@ -460,6 +462,11 @@ interface Http2Socket extends StandardMethods{
      * Used events:
      *  - `error`: If anything goes wrong this is invoked.
      * on(event: string, listener: (event:any|unknown)=>void|Promise<void>);
+     */
+    
+    /**
+     * Containts the HTTP2 preface
+     * static readonly magic:string;
      */
     
 }
