@@ -454,8 +454,9 @@ class Engine extends StandardMethods{
         this,
         this.#ra,
       ];
-      const http2:Http2Socket=new this.#engine.Http2Socket(...args)
+      const http2:Http2Socket=new this.#engine.Http2Socket(...args);
       this.#http2=http2;
+      //http2.on("error",e=>this.emit("error",e));
       let suc:boolean=await http2.ready;
       if(suc){
         this.#upgraded=true;
@@ -776,9 +777,9 @@ class Engine extends StandardMethods{
       try{
         let client:Client=this.#socket.client;
         if(client.isValid){
-          let upgd=client.headers["upgrade"].trim();
+          let upgd=client.headers["upgrade"]?.trim();
           //if(!upgd)throw new Error("client does not wanna upgrade");
-          let settH=client.headers["HTTP2-Settings"].trim(); // can be ignored as client will send them again.
+          let settH=client.headers["http2-settings"]?.trim(); // can be ignored as client will send them again.
 
 
           let res=`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n`;
@@ -860,8 +861,9 @@ class Engine extends StandardMethods{
                 else for(let si in fr.settings.int){
                   if(!settings[fr.streamId])settings[fr.streamId]={...setting,...fr.settings.int};
                   else for(let si in fr.settings.int)settings[fr.streamId][si]=fr.settings.int[si];
-                }
+                };
                 if(fr.settings.int[4])flow[fr.streamId]=fr.settings.int[4];
+                await this.#tcp.write(this.#frame(fr.streamId,4,{flags:["ack"]})).catch(e=>e);
               }else if(fr.raw.type==8){
                 let wu=fr.buffer;
                 //if(!flow[fr.streamId])flow[fr.streamId]=flow[0];
@@ -919,6 +921,9 @@ class Engine extends StandardMethods{
       const hand=new class StreamHandler{
         #client={body,headers,remoteAddr};
         #closed=false;
+
+        get client(){return this.#client};
+        get closed(){return this.#closed};
 
         #headers:Record<string,string>={};
         #sysHeaders:Record<string,string>={":status":"200"};

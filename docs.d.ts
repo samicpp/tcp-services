@@ -19,12 +19,13 @@ interface StandardMethods{
      * @param name Event name.
      * @param object Event object wich listeners will be invoked with.
      * 
-     * @event error Event which will be triggered when anything went wrong.
+     * @event error Event which will be triggered when anything went wrong. Dispatched with `Error`.
      * @event nulldata Unique to Engine. Triggered when client didn't send any data.
-     * @event frame Unique to WebSocket. Triggered when client sends a web socket frame
-     * 
+     * @event frame Unique to WebSocket. Triggered when client sends a web socket frame. Dispatched with `WsFrame`.
+     * @event connection Unique to Engine. Triggered when a client sends a HTTP request. Dispatched with `HttpSocket`.
+     * @event stream Unique to Http2Socket. Triggered when a client has sent sufficient frames for a server response. Dispatched with `Http2Stream`
      */
-    emit(name:string,object:HttpSocket|Http2Socket|WsFrame|any):void;
+    emit(name:string,object:HttpSocket|Http2Stream|WsFrame|any):void;
 }
 
 /**
@@ -249,6 +250,13 @@ interface HttpSocket extends StandardMethods {
      * @returns A `WebSocket` instance if successful, otherwise `void`.
      */
     websocket(): Promise<WebSocket | void>;
+
+    /**
+     * Upgrade the current connection to HTTP2
+     * 
+     * @returns A `Http2Socket` instance if successful, otherwise `void`.
+     */
+    http2(): Promise<Http2Socket | void>;
 }
 
 /**
@@ -300,7 +308,7 @@ interface Client {
 /**
  * WebSocket: Represents a WebSocket connection.
  */
-interface WebSocket {
+interface WebSocket extends StandardMethods{
     /**
      * Indicates whether the WebSocket connection is ready for use.
      */
@@ -379,8 +387,9 @@ interface WebSocket {
      * 
      * @param event The name of the event to listen for.
      * @param listener The callback function to invoke with event data.
+     * on(event: string, listener: (data: WsFrame | Error | any) => void): void;
      */
-    on(event: string, listener: (data: WsFrame | Error | any) => void): void;
+    
 }
 
 /**
@@ -419,7 +428,7 @@ interface WsFrame {
 /**
  * Used for HTTP2
  */
-interface Http2Socket{
+interface Http2Socket extends StandardMethods{
     /**
      * The maximum number of bytes to read per tcp packet.
      */
@@ -450,8 +459,9 @@ interface Http2Socket{
      * 
      * Used events:
      *  - `error`: If anything goes wrong this is invoked.
+     * on(event: string, listener: (event:any|unknown)=>void|Promise<void>);
      */
-    on(event: string, listener: (event:any|unknown)=>void|Promise<void>);
+    
 }
 
 /**
@@ -517,6 +527,9 @@ interface Http2Frame{
     readonly settings:{readonly str:Record<string,number>,readonly int:Record<number,number>},
 }
 
+/**
+ * HTTP2
+ */
 interface Http2Stream{
     /**
      * Status to be sent.
@@ -550,7 +563,27 @@ interface Http2Stream{
 }
 
 /**
- * Heres an example for using this framework
+ * HTTP2
+ */
+interface Client2{
+    /**
+     * Contains the request body if applicable.
+     */
+    readonly body:Uint8Array;
+
+    /**
+     * Contains the request headers.
+     */
+    readonly headers:Record<string,string>;
+
+    /**
+     * IP information about the client.
+     */
+    readonly remoteAddr:Deno.NetAddr;
+}
+
+/**
+ * An example for using this framework is located in example.ts
  */
 
 /*
