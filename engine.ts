@@ -781,6 +781,8 @@ class Engine extends StandardMethods{
     };
     get readSize():number{return this.#readSize};
 
+    get type(){return this.#type};
+
 
     constructor(engine,td,te,tcp,data,socket,type,remoteAddr){
       super();
@@ -851,13 +853,14 @@ class Engine extends StandardMethods{
 
     get ownSettings(){return this.#ownSettings} // only to make sure you only modify properties and not the object itself
     #ownSettings:Record<string|number,number>={initial_window_size:1048576,max_header_list_size:16384};
-    async sendSettings(){
+    async sendSettings():Promise<void>{
       try{
         const settFrame=this.#frame(0,"settings",{flags:[],settings:this.ownSettings});
         await this.#tcp.write(settFrame.buffer);
+        //return true;
       }catch(err) {
         this.emit("error",err);
-        return false;
+        //return false;
       }
     }
 
@@ -969,23 +972,32 @@ class Engine extends StandardMethods{
       const tcp=this.#tcp;
       const hpack=this.#hpack;
       const remoteAddr=this.#ra;
-      const http2=this;
+      const http2:Http2Socket=this;
       const usedSids=this.#usedSids;
+      const type=this.#type;
 
-      const hand=new class StreamHandler{
+      const hand=new class StreamHandler extends StandardMethods{
         #client={body,headers,remoteAddr};
         #closed=false;
 
-        get client(){return this.#client};
-        get closed(){return this.#closed};
+        get client():Client2{return this.#client};
+        get closed():boolean{return this.#closed};
+
+        get type():string{return type};
+        
+        get compress():boolean{return false};
+        #compress(t,b):Uint8Array|void{
+          if(t=="gzip")return compress.gzip(b);
+        };
 
         #headers:Record<string,string>={};
         #sysHeaders:Record<string,string>={":status":"200"};
         #sentHead=false;
-        get status():number{return parseInt(this.#sysHeaders[":status"])}
+        get status():number{return parseInt(this.#sysHeaders[":status"])};
         set status(status:number){this.#sysHeaders[":status"]=status.toString()};
-        setHeader(name:string,value:string):void{this.#headers[name.toString()]=value.toString()};
-        removeHeader(name:string):boolean{return delete this.#headers[name]};
+        setHeader(name:string,value:string):void{this.#headers[name.toString().toLowerCase()]=value.toString()};
+        removeHeader(name:string):boolean{return delete this.#headers[name.toLowerCase()]};
+        get headers():Record<string,string>{return {...this.#headers,...this.#sysHeaders}};
         async reset():Promise<boolean>{
           let suc=await tcp.write(frame(sid,3,{data:"\x00\x00\x00\x00"}).buffer)//.then(r=>r?this.#closed=true:false)
           if(suc){
@@ -1058,8 +1070,55 @@ class Engine extends StandardMethods{
           return suc;
         };
 
-        async pseudo(){ // future
-          ;
+        pseudo():PseudoHttpSocket{ // future
+          const th=this;
+          const oc=th.client;
+          const written:number[]=[];
+          const psock=new class PseudoHttpSocket extends StandardMethods{
+            get socket():PseudoHttpSocket{return this};
+            get client():PseudoClient{
+              const client:PseudoClient=new class PseudoClient{
+                isValid=true;
+                err=undefined;
+                headers={};
+                method=oc.headers[":method"];
+                address=oc.remoteAddr;
+                path=oc.headers[":path"];
+                httpVersion="HTTP/2";
+                data=td.decode(oc.body);
+              };
+              for(let h in oc.headers){
+                let v=oc.headers[h];
+                if(h[0]!=":")client.headers[h]=v;
+                else if(h==":authority")client.headers.host=v;
+              };
+              
+              return client;
+            };
+            get isWebSocket():boolean{return false};
+            get type():string{return type};
+            get enabled():boolean{return th.closed};
+            get status(){return th.status};
+            set status(s){th.status=s};
+            statusMessage="";
+            get compress(){return th.compress};
+            setHeader(name:string,value:string):boolean{th.setHeader(name,value);return true};
+            removeHeader(name:string):boolean{return th.removeHeader(name)};
+            writeHead(status?: number, statusMessage?: string, headers?: Record<string,string>):boolean{
+              if(status)th.status=status;
+              if(headers)for(let [h,v] of Object.entries(headers))th.setHeader(h,v);
+              return true;
+            };
+            headers():Record<string,string>{return th.headers};
+            async writeText(str:string):Promise<void>{const b=te.encode(str);written.push(...b);await th.write(b)};
+            async writeBuffer(b:Uint8Array):Promise<void>{written.push(...b);await th.write(b)};
+            async close(d?:Uint8Array|string):Promise<void>{if(d){let b=d;if(typeof d=="string")b=te.encode(d);written.push(...b)};await th.close(d)};
+            written():Uint8Array{return new Uint8Array(written)};
+            deny(){th.reset()};
+            async websocket():Promise<WebSocket|void>{return undefined};
+            async http2():Promise<Http2Socket|void>{return http2};
+          };
+          return psock;
         }
       };
       return hand;

@@ -53,17 +53,19 @@ const readfText=g=>readf(g).then(b=>td.decode(b));
 export async function listener2(socket: Http2Socket){
   socket.on("error",console.error);
   let suc=await socket.ready;
-  if(!suc)console.warn("ready not successful",socket);
-  console.log("http2",socket);
+  if(!suc)console.warn("http2 ready not successful",socket);
+  //console.log("http2",socket);
   socket.on("stream",async function(stream:Http2Stream){
-    console.log(stream);
+    /*console.log(stream);
 
     //stream.status=200;
     stream.setHeader("content-type","text/plain");
-    await stream.close("Hello, world!");
+    await stream.close("Hello, world!");*/
+    const ps=stream.pseudo();
+    listener(ps);
   })
 };
-export async function listener({socket,client}: HttpSocket){
+export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
     socket.on("error",console.error);
     //console.log(socket.enabled);
     let proxied=false;
@@ -75,18 +77,7 @@ export async function listener({socket,client}: HttpSocket){
       socket.close("Cannot read client request");
       return; //socket.deny();
     }*/
-    if(isValid&&client.headers.upgrade?.includes("h2c")){
-      const h2c=await socket.http2();
-      if(h2c){
-        listener2(h2c);
-        console.log("letting http2 handler take over");
-        return;
-      } else {
-        console.log("couldn't upgrade");
-        //socket.deny();
-        return;
-      }
-    }
+    
     if(client.address.hostname=="127.0.0.1"&&client.headers["x-real-ip"]){
         proxied=true;
     }

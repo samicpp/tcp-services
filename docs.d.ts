@@ -453,7 +453,7 @@ interface Http2Socket extends StandardMethods{
     ownSettings:Record<string|number,number>;
 
     /**
-     * Sends the servers settings for the whole connection.
+     * Sends the servers settings for the whole connection. Returns true if succesful
      */
     sendSettings():Promise<void>;
 
@@ -461,6 +461,13 @@ interface Http2Socket extends StandardMethods{
      * Is true when client allows server push (aka PROMISE_PUSH).
      */
     readonly pushEnabled:boolean;
+
+    /**
+     * Indicates if the current connection is over tls or plain tcp.
+     * @value tcp Plain tcp.
+     * @value tcp::tls Tls over tcp.
+     */
+    readonly type: string;
 
     /**
      * Listens for a specific event
@@ -474,7 +481,6 @@ interface Http2Socket extends StandardMethods{
      * Containts the HTTP2 preface
      * static readonly magic:string;
      */
-    
 }
 
 /**
@@ -538,25 +544,12 @@ interface Http2Frame{
      * @property int An object with the settings where the property is the integer form of the setting.
      */
     readonly settings:{readonly str:Record<string,number>,readonly int:Record<number,number>},
-
-    /**
-     * Performs a PUSH_PROMISE. Resolves with true if successful. If not, false.
-     * @param requestHeaders The request headers needed for PUSH_PROMISE
-     * @param headers The response headers of the server push
-     * @param data The content in the server push
-     */
-    push(requestHeaders:Record<string,string>,headers:Record<string,string>,data:string|Uint8Array):Promise<boolean>;
-
-    /**
-     * Resets the stream. Resolves with true if successful.
-     */
-    reset():Promise<boolean>;
 }
 
 /**
  * HTTP2
  */
-interface Http2Stream{
+interface Http2Stream extends StandardMethods{
     /**
      * Status to be sent.
      */
@@ -588,9 +581,151 @@ interface Http2Stream{
     close(data:string|Uint8Array):Promise<boolean>;
 
     /**
-     * Returns object with similar methods to HttpSocket. Used for backwards compatibility. Not yet implemented
+     * Performs a PUSH_PROMISE. Resolves with true if successful. If not, false.
+     * @param requestHeaders The request headers needed for PUSH_PROMISE
+     * @param headers The response headers of the server push
+     * @param data The content in the server push
      */
-    pseudo():unknown;
+    push(requestHeaders:Record<string,string>,headers:Record<string,string>,data:string|Uint8Array):Promise<boolean>;
+
+    /**
+     * Resets the stream. Resolves with true if successful.
+     */
+    reset():Promise<boolean>;
+
+    /**
+     * Returns object with similar methods to HttpSocket. Used for backwards compatibility.
+     */
+    pseudo():PseudoHttpSocket;
+
+    /**
+     * Indicates wether the response will be compressed. 
+     */
+    readonly compress: boolean;
+}
+
+/**
+ * HTTP2
+ */
+interface PseudoHttpSocket extends StandardMethods{
+    /**
+     * A self-reference to this HTTPSocket instance for destructuring purposes.
+     * Typically used in `{ socket, client }` patterns.
+     */
+    readonly socket: PseudoHttpSocket;
+
+    /**
+     * Metadata about the client making the request.
+     */
+    readonly client: PseudoClient;
+
+    /**
+     * Indicates if the current connection has been upgraded to a WebSocket.
+     * @value Will always be false.
+     */
+    readonly isWebSocket: boolean;
+
+    /**
+     * Indicates if the current connection is over tls or plain tcp.
+     * @value tcp Plain tcp.
+     * @value tcp::tls Tls over tcp.
+     */
+    readonly type: string;
+
+    /**
+     * Indicates if this object is still being used for a response.
+     */
+    readonly enabled: boolean;
+
+    /**
+     * HTTP response status code (e.g., 200 for success).
+     */
+    status: number;
+
+    /**
+     * Only here for backwards compatibility.
+     */
+    statusMessage: string;
+
+    /**
+     * Indicates wether the response will be compressed. 
+     */
+    readonly compress: boolean;
+
+    /**
+     * Sets a single HTTP header for the response.
+     * 
+     * @param name The name of the header.
+     * @param value The value of the header.
+     * @returns `true` if the header was successfully set, `false` otherwise.
+     */
+    setHeader(name: string, value: string): boolean;
+
+    /**
+     * Removes a single HTTP header from the response.
+     * 
+     * @param name The name of the header.
+     * @returns `true` if the header was successfully removed, `false` otherwise.
+     */
+    removeHeader(name: string): boolean;
+
+    /**
+     * Sets multiple HTTP headers and optionally the status code and message.
+     * 
+     * @param status Optional. HTTP status code.
+     * @param statusMessage Optional. HTTP status message.
+     * @param headers Optional. Key-value pairs of headers to set.
+     * @returns `true` if headers were successfully set, `false` otherwise.
+     */
+    writeHead(status?: number, statusMessage?: string, headers?: object): boolean;
+
+    /**
+     * Returns all headers as an object
+     */
+    headers(): Record<string,string>;
+
+    /**
+     * Sends a plain text response to the client and finalizes the headers.
+     * 
+     * @param text The text content to send.
+     */
+    writeText(text: string): Promise<void>;
+
+    /**
+     * Sends a binary response to the client and finalizes the headers.
+     * 
+     * @param buff The binary data to send.
+     */
+    writeBuffer(buff: ArrayBuffer): Promise<void>;
+
+    /**
+     * Closes the connection with an optional final message or data.
+     * 
+     * @param data Optional. Data to send before closing the connection.
+     */
+    close(data?: ArrayBuffer | string): Promise<void>;
+
+    /**
+     * Returns the written response body as buffer.
+     */
+    written(): Uint8Array;
+
+    /**
+     * Resets stream.
+     */
+    deny(): void;
+
+    /**
+     * Upgrades the current HTTP connection to a WebSocket.
+     * 
+     * @returns A `WebSocket` instance if successful, otherwise `void`.
+     */
+    websocket(): Promise<WebSocket | void>;
+
+    /**
+     * Returns the HTTP2 socket
+     */
+    http2(): Promise<Http2Socket | void>;
 }
 
 /**
@@ -611,6 +746,54 @@ interface Client2{
      * IP information about the client.
      */
     readonly remoteAddr:Deno.NetAddr;
+}
+
+/**
+ * HTTP2
+ */
+interface PseudoClient{
+    /**
+     * Only here for backwards compat.
+     * @value Is always true.
+     */
+    readonly isValid:boolean;
+
+    /**
+     * Will always be void.
+     */
+    readonly err: void;
+
+    /**
+     * A map of client headers, with all header names in lowercase.
+     */
+    readonly headers: Record<string, string>;
+
+    /**
+     * The HTTP method used by the client (e.g., `GET`, `POST`).
+     */
+    readonly method: string;
+
+    /**
+     * Network address information of the client.
+     */
+    readonly address: Deno.NetAddr;
+
+    /**
+     * The requested path from the client (e.g., `/index.html`).
+     */
+    readonly path: string;
+
+    /**
+     * The HTTP version used by the client (e.g., `HTTP/1.1`).
+     * @value Is always `HTTP/2`.
+     */
+    readonly httpVersion: string;
+
+    /**
+     * The body data sent by the client.
+     * Note: This will be populated even for `GET` requests.
+     */
+    readonly data: string;
 }
 
 /**

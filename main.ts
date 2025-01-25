@@ -141,10 +141,26 @@ for(let sport of sports)tcp.start(parseInt(sport));
 tcp.proxied=true;
 tcp.intTlsOpt=tlsopt;
 for(let dport of dports)tcp.proxy(parseInt(dport));
-tcp.on("connect",http.listener);
 tcp.on("nulldata",e=>logsole.log("no data"));
 tcp.on("error",e=>logsole.error(e));
 // http2, should also make it a cli option
+tcp.on("connect",async({socket,client}:HttpSocket)=>{
+    if(client.isValid&&client.headers.upgrade?.includes("h2c")){
+        const h2c=await socket.http2();
+        if(h2c){
+            http.listener2(h2c);
+            console.log("using http2");
+            return;
+        } else {
+            console.log("couldn't upgrade to http2");
+            //socket.deny();
+            return;
+        }
+    } else {
+        http.listener(socket);
+        console.log("using http1.1");
+    };
+});
 tcp.on("http2",http.listener2);
 tcp.upgrade=true;
 
