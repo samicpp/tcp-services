@@ -54,6 +54,7 @@ export async function listener2(socket: Http2Socket){
   socket.on("error",console.error);
   let suc=await socket.ready;
   if(!suc)console.warn("http2 ready not successful",socket);
+  console.log("http2",socket);
   //console.log("http2",socket);
   socket.on("stream",async function(stream:Http2Stream){
     /*console.log(stream);

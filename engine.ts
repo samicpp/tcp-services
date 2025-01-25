@@ -18,13 +18,20 @@ const TypedArray=Object.getPrototypeOf(Uint8Array.prototype).constructor;
 
 class StandardMethods{
   #on = {};
+  #que = {};
   on(eventName: string, listener: (event: any) => void|Promise<void>):void {
     if (!this.#on[eventName]) this.#on[eventName] = [];
     this.#on[eventName].push(listener);
+    if(this.#que[eventName]) {
+      this.#que[eventName].forEach((e) => listener(e));
+      this.#que[eventName]=[];
+    };
   }
   emit(eventName: string, obj: any) {
     //console.log(eventName,obj);
+    if(!this.#que[eventName])this.#que[eventName]=[];
     if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
+    else this.#que[eventName].push(obj);
   }
 }
 
@@ -773,7 +780,7 @@ class Engine extends StandardMethods{
   #Socket2 = class Http2Socket extends StandardMethods{
     #engine; #tcp; #ra;
     #td; #te; #data; #type;
-    #socket; #ready;
+    #socket; #ready; #client1;
 
     #readSize = 1024 * 10;
     set readSize(int:any){
@@ -795,6 +802,7 @@ class Engine extends StandardMethods{
       this.#engine = engine;
       this.#socket = socket;
       this.#ra = remoteAddr;
+      this.#client1 = socket?.client;
 
       this.#readSize=engine.readSize;
       this.updateSize();
@@ -896,11 +904,12 @@ class Engine extends StandardMethods{
 
 
         let frames:Http2Frame[]=fframes;
+        let usedSocket=false;
         while(true){
           try{
             for(const fr of frames){
               if(!this.#usedSids.includes(fr.streamId))this.#usedSids.push(fr.streamId);
-              if(fr.raw.type!=0&&!flow[fr.streamId])flow[fr.streamId]=flow[0];
+              if(fr.streamId!=0&&!flow[fr.streamId])flow[fr.streamId]=flow[0];
               if(fr.raw.type==4&&fr.raw.flags==0){
                 //settings.push(fr);
                 if(fr.streamId==0)for(let si in fr.settings.int)this.#setting[si]=fr.settings.int[si];
@@ -938,6 +947,20 @@ class Engine extends StandardMethods{
               };
             };
 
+            if(!usedSocket&&this.#socket){
+              // means http2 upgrade took place
+              const socket:HttpSocket=this.#socket;
+              const client:Client=this.#client1;
+              headers[1]={};
+              headers[1][":path"]=client.path;
+              headers[1][":method"]=client.method;
+              headers[1][":authority"]=client.headers.host;
+              headers[1][":scheme"]=this.type=="tcp::tls"?"https":"http";
+              for(let [k,v] of Object.entries(client.headers))headers[1][k]=v;
+              bodies[1]=this.#te.encode(client.data);
+              this.#respond(1,headers,bodies);
+              usedSocket=true;
+            }
             // handle streams 
 
 
@@ -957,9 +980,11 @@ class Engine extends StandardMethods{
       };
     };
     async#respond(sid,headers,bodies){
+      //console.log(sid,headers,bodies);
       const hand=this.#handler(sid,headers[sid],bodies[sid]);
       headers[sid]={};
       bodies[sid]=[];
+      //console.log("new stream handler",hand);
       this.emit("stream",hand);
     };
     #handler(sid,headers,body):Http2Stream{
@@ -995,7 +1020,10 @@ class Engine extends StandardMethods{
         #sentHead=false;
         get status():number{return parseInt(this.#sysHeaders[":status"])};
         set status(status:number){this.#sysHeaders[":status"]=status.toString()};
-        setHeader(name:string,value:string):void{this.#headers[name.toString().toLowerCase()]=value.toString()};
+        setHeader(name:string,value:string):void{
+          let no=["connection"],nam=name.toString().toLowerCase();
+          if(!no.includes(nam))this.#headers[nam]=value.toString();
+        };
         removeHeader(name:string):boolean{return delete this.#headers[name.toLowerCase()]};
         get headers():Record<string,string>{return {...this.#headers,...this.#sysHeaders}};
         async reset():Promise<boolean>{
@@ -1122,7 +1150,7 @@ class Engine extends StandardMethods{
         }
       };
       return hand;
-    }
+    };
 
     #hpack=new HPACK;
     #frameTypes={
@@ -1267,7 +1295,7 @@ class Engine extends StandardMethods{
           };
       }
 
-    }
+    };
     *#packet(buff:Uint8Array){
       try{
         // frame types cheat sheet
