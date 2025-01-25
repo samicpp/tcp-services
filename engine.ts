@@ -284,14 +284,17 @@ class Engine extends StandardMethods{
     statusMessage: string = "OK";
     compress: boolean = false;
     encoding: string = "gzip";
-    #headers: Record<string, string> = {
-      "Content-Type": "text/html",
-      //"Transfer-Encoding": "chunked",
+    #sysHeaders: Record<string,string>={
       "Connection":"keep-alive",
       "Keep-Alive":"timeout=5",
-      "Server":"TI-84 Plus CE-T Python Edition",
       "Date": new Date().toString(),
+    }
+    #userHeaders: Record<string, string> = {
+      "Content-Type": "text/html",
+      //"Transfer-Encoding": "chunked",
+      "Server":"TI-84 Plus CE-T Python Edition",
     };
+    get#headers(){return {...this.#userHeaders,...this.#sysHeaders}};
     #headersSent = false;
     #headersPromise: Promise<void>;
     async #writeTcp(data){return await this.#tcp.write(data).catch(e=>e);};
@@ -324,13 +327,13 @@ class Engine extends StandardMethods{
     setHeader(a: string, b: string): boolean {
       if(!this.enabled)return false;
       if (this.#headersSent == true) return false;
-      this.#headers[a] = b;
+      this.#userHeaders[a] = b;
       return true;
     }
     removeHeader(a: string): boolean{
       if(!this.enabled)return false;
       if (this.#headersSent == true) return false;
-      if(this.#headers[a]) return delete this.#headers[a];
+      if(this.#userHeaders[a]) return delete this.#userHeaders[a];
       return false;
     }
     writeHead(status?: number, statusMessage?: string, headers?: object): void {
@@ -351,7 +354,7 @@ class Engine extends StandardMethods{
     async writeText(text: string): Promise<void> {
       if(!this.enabled)return;
       if(this.#closed)return;
-      this.setHeader("Transfer-Encoding","chunked");
+      this.#sysHeaders["Transfer-Encoding"]="chunked";
       let b=this.#te.encode(text);
       let w=b;
       this.#written.push(...b);
@@ -369,7 +372,7 @@ class Engine extends StandardMethods{
     async writeBuffer(buffer: Uint8Array): Promise<void> {
       if(!this.enabled)return;
       if(this.#closed)return;
-      this.setHeader("Transfer-Encoding","chunked");
+      this.#sysHeaders["Transfer-Encoding"]="chunked";
       let b=buffer;
       let w=b;
       this.#written.push(...b);
@@ -404,7 +407,7 @@ class Engine extends StandardMethods{
             ;
           };
         };
-        this.#headers["Content-Length"]=w.byteLength.toString();
+        this.#sysHeaders["Content-Length"]=w.byteLength.toString();
         const head=this.#te.encode(this.#headerString());
         const pack=new Uint8Array(head.byteLength+w.byteLength);
         pack.set(head);
@@ -414,7 +417,7 @@ class Engine extends StandardMethods{
       }
       if(b)this.#written.push(...b);
       this.#headersSent=true;
-      this.#tcp.close();
+      if(this.#headers["Connection"]!="keep-alive")this.#tcp.close();
       this.#closed=true;
     }
     written(): Uint8Array{ return new Uint8Array(this.#written); }

@@ -11,7 +11,7 @@ This server is running on [www.cppdev.dev](https://www.cppdev.dev/?reff=github).
 
 ### engine.ts
 Methods and use cases specified in `docs.ts`.
-Responsible for handling the HTTP (or WebSocket) connections starting from the TCP/UDP level with or without TLS.
+Responsible for handling the HTTP connections starting from the TCP level with or without TLS. Supports HTTP/1.1, HTTP/2 and WebSocket.
 
 
 ### http-server.ts
@@ -73,8 +73,8 @@ This is a list of things i might implement in the future.
 
 ## engine.ts
  - [ ] Fix client data reading.
- - [ ] ~~Full HTTP/3 support~~ (no reliable UDP related methods in deno yet).
- - [ ] Store system headers (things like `Content-Length`) separate from user configurable headers.
+ - [ ] ~~Full HTTP/3 support~~ (no QUIC support).
+ - [x] Store system headers (things like `Content-Length`) separate from user configurable headers.
  - [x] Full HTTP/2 support (not just translation).
 
 ## http-server.ts
