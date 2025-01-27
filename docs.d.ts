@@ -114,6 +114,7 @@ interface TlsOptions{
     cert: string,
     key: string,
     ca?: string,
+    alpnProtocols?: string[],
 }
 
 /**

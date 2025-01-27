@@ -1,0 +1,1 @@
+${JSON.stringify(socket.client,null,2)}

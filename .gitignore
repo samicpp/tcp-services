@@ -7,3 +7,4 @@ logcat.log
 last-pid.txt
 log/*
 tls-rs/target
+http/config.json

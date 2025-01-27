@@ -131,6 +131,7 @@ let tlsopt: TlsOptions={
     key: await deno.readTextFile(deno.env.get("keyfile")).catch(e=>""),
     cert: await deno.readTextFile(deno.env.get("certfile")).catch(e=>""),
     ca: await deno.readTextFile(deno.env.get("cafile")).catch(e=>""),
+    alpnProtocols: ["h2","http/1.1"],
 };
 
 

@@ -285,7 +285,7 @@ class Engine extends StandardMethods{
     compress: boolean = false;
     encoding: string = "gzip";
     #sysHeaders: Record<string,string>={
-      "Connection":"keep-alive",
+      "Connection":"close",
       "Keep-Alive":"timeout=5",
       "Date": new Date().toString(),
     }
