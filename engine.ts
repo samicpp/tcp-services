@@ -287,7 +287,7 @@ class Engine extends StandardMethods{
     #sysHeaders: Record<string,string>={
       "Connection":"close",
       "Keep-Alive":"timeout=5",
-      "Date": new Date().toString(),
+      "Date": new Date().toGMTString(),
     }
     #userHeaders: Record<string, string> = {
       "Content-Type": "text/html",
@@ -912,7 +912,7 @@ class Engine extends StandardMethods{
           try{
             for(const fr of frames){
               if(!this.#usedSids.includes(fr.streamId))this.#usedSids.push(fr.streamId);
-              if(fr.streamId!=0&&!flow[fr.streamId])flow[fr.streamId]=flow[0];
+              if(fr.streamId!=0&&!flow[fr.streamId])this.#flowInit(fr.streamId);//flow[fr.streamId]=setting[4];
               if(fr.raw.type==4&&fr.raw.flags==0){
                 //settings.push(fr);
                 if(fr.streamId==0)for(let si in fr.settings.int)this.#setting[si]=fr.settings.int[si];
@@ -990,8 +990,12 @@ class Engine extends StandardMethods{
       //console.log("new stream handler",hand);
       this.emit("stream",hand);
     };
+    #flowInit(sid:number){
+      this.#flow[sid]=this.#setting[4];
+    }
     #handler(sid,headers,body):Http2Stream{
       const frame=(...a)=>this.#frame(...a);
+      const flowInit=(sid:number)=>this.#flowInit(sid);
       const setting=this.#setting;
       const settings=this.#settings;
       const flow=this.#flow;
@@ -1039,7 +1043,7 @@ class Engine extends StandardMethods{
         };
         #write(buff:ArrayBuffer):Promise<boolean>{return tcp.write(buff).then(r=>true).catch(e=>false);};
         #getHeadBuff(end:boolean){
-          this.#sysHeaders.date=new Date().toString();
+          this.#sysHeaders.date=new Date().toGMTString();
           this.#sysHeaders.vary="Accept-Encoding";
           let head;
           if(!end)head=frame(sid,1,{headers:{":status":this.#sysHeaders[":status"],...this.#headers,...this.#sysHeaders},flags:["end_headers"]});  // sys headers last to overule any simulated user headers such as `:status`
@@ -1054,19 +1058,29 @@ class Engine extends StandardMethods{
         };
 
         get sizeLeft(){return flow[sid]};
+        #flowSize(len:number,stid:number=sid):boolean{
+          return flow[stid]-len>0&&flow[0]-len>0;
+        }
+        #flowPass(len:number,stid:number=0):boolean{
+          if(this.#flowSize(len,stid)){
+            flow[stid]-=len;flow[0]-=len;
+            return true;
+          } else return false;
+        }
 
         async write(data:string|Uint8Array){
           if(this.#closed)return false;
           await this.#sendHead();
-          if(data.length>this.sizeLeft)throw new Error("window size too small");
+          if(!this.#flowSize(data.length))throw new Error("window size too small");
           const dataFrame=frame(sid,"data",{data});
-          flow[sid]-=data.length;
+          this.#flowPass(data.length);
           return await this.#write(dataFrame.buffer);
         };
 
         async close(data?:string|Uint8Array){
           if(this.#closed)return false;
-          if(data&&data.length>this.sizeLeft)throw new Error("window size too small");
+          if(data&&!this.#flowSize(data.length))throw new Error("window size too small");
+          if(data)this.#flowPass(data.length);
           if(!data)return await this.#sendHead(true);
           //else await this.#sendHead();
           else if(!this.#sentHead){
@@ -1082,6 +1096,7 @@ class Engine extends StandardMethods{
 
         async push(req:Record<string,string>,headers:Record<string,string>,data:string|Uint8Array):Promise<boolean>{
           if(!http2.pushEnabled)return false;
+          //if(flow[0]-data.length<0)throw new Error("window size too small");
           let max=http2.mainIntSettings[3];
           if(max>300)max=300;
           let nsid:number=-1;
@@ -1092,10 +1107,14 @@ class Engine extends StandardMethods{
             }
           };
           if(nsid==-1)return false;
+          flowInit(nsid);
+          if(!this.#flowSize(data.length,nsid))throw new Error("window size too small");
           //let sidb=(nsid.toString(16).padStart(8,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16));
-          let pf=frame(sid,5,{flags:["end_headers"],targetStreamId:nsid,headers:req}).buffer;
+          let pf=frame(sid,5,{targetStreamId:nsid,headers:req}).buffer;
           let hf=frame(nsid,1,{flags:["end_headers"],headers}).buffer;
-          let df=frame(nsid,0,{flags:["end_headers"],data}).buffer;
+          let df=frame(nsid,0,{flags:["end_stream"],data}).buffer;
+          //if(flow[0]-data.length>0)df=frame(nsid,0,{flags:["end_stream"],data}).buffer;
+          //else throw new Error("window size too small");
           let jf=new Uint8Array([...pf,...hf,...df]);
           let suc=await this.#write(jf);
           return suc;
