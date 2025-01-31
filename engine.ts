@@ -10,9 +10,14 @@ const sec={
   regex:/(?:)/
 };
 
+const libOpt={
+  debug:false,
+  eventDbg:false,
+};
+
 interface SecureID{
   regex: RegExp;
-}
+};
 
 const TypedArray=Object.getPrototypeOf(Uint8Array.prototype).constructor;
 
@@ -20,6 +25,7 @@ class StandardMethods{
   #on = {};
   #que = {};
   on(eventName: string, listener: (event: any) => void|Promise<void>):void {
+    if(libOpt.eventDbg)console.log("on",eventName,listener);
     if (!this.#on[eventName]) this.#on[eventName] = [];
     this.#on[eventName].push(listener);
     if(this.#que[eventName]) {
@@ -28,12 +34,13 @@ class StandardMethods{
     };
   }
   emit(eventName: string, obj: any) {
+    if(libOpt.eventDbg)console.log("emit",eventName,obj);
     //console.log(eventName,obj);
     if(!this.#que[eventName])this.#que[eventName]=[];
     if (this.#on[eventName]) this.#on[eventName].forEach((e) => e(obj));
     else this.#que[eventName].push(obj);
   }
-}
+};
 
 class Engine extends StandardMethods{
   #Deno = Deno;
@@ -911,6 +918,7 @@ class Engine extends StandardMethods{
         while(true){
           try{
             for(const fr of frames){
+              if(libOpt.debug)console.log(fr.type,fr);
               if(!this.#usedSids.includes(fr.streamId))this.#usedSids.push(fr.streamId);
               if(fr.streamId!=0&&!flow[fr.streamId])this.#flowInit(fr.streamId);//flow[fr.streamId]=setting[4];
               if(fr.raw.type==4&&fr.raw.flags==0){
@@ -925,7 +933,8 @@ class Engine extends StandardMethods{
               }else if(fr.raw.type==8){
                 let wu=fr.buffer;
                 //if(!flow[fr.streamId])flow[fr.streamId]=flow[0];
-                this.#flow[fr.streamId]+=parseInt(wu.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
+                let awu=[...wu];
+                this.#flow[fr.streamId]+=parseInt(awu.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
               }else if(fr.raw.type==1){
                 if(!headers[fr.streamId])headers[fr.streamId]={};
                 headers[fr.streamId]={...headers[fr.streamId],...fr.headers};
@@ -1500,9 +1509,19 @@ class Engine extends StandardMethods{
         return this[name];
     }
   };
-}
+};
 
 export default Engine;
+export {
+  Engine,
+  StandardMethods,
+  libOpt,
+};
+export function setOpt(name:string,value:any):boolean{
+  if(typeof libOpt[name]!=typeof value)return false;
+  libOpt[name]=value;
+  return true;
+};
 
 //console.log('data',data)
 /*await conn.write(encoder.encode(`HTTP/2 200 OK\r
