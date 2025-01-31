@@ -1,13 +1,17 @@
-import Engine from './engine.ts';
+import {Engine,setOpt} from './engine.ts';
 import * as http from './http-server.ts';
-import docs from "./docs.d.ts";
+import "./docs.d.ts";
+import "./lib.deno.d.ts";
 import * as Logsole from './console.ts';
 //import "jsr:@std/dotenv/load";
 const deno=Deno; // mitigate error messages in vscode
 
 let logcatPath=deno.env.get("logcatfile");
 
-Error.stackTraceLimit = 1000;
+//Error.stackTraceLimit = 1000;
+
+setOpt("debug",false);
+setOpt("eventDbg",false);
 
 let args:{
     opt:Record<string,string[]>;
@@ -21,8 +25,8 @@ let args:{
 let nopt:string='';
 for(let a of deno.args){
     if(nopt){
-        args.opt[nopt.replace("--","")]=a;
-        nopt="";
+        //args.opt[nopt.replace("--","")]=a;
+        //nopt="";
     } else if(a.startsWith("--")&&a.length>2){
         let l=a.split("=");
         let fl=l[0].replace("--","");

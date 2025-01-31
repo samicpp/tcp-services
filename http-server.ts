@@ -1,5 +1,6 @@
 import mime from "./mime-types.json" with { type: "json" };
-import docs from "./docs.d.ts";
+import "./docs.d.ts";
+import "./lib.deno.d.ts";
 import OpenAI from "https://deno.land/x/openai@v4.20.1/mod.ts";
 import * as canvas from "https://deno.land/x/canvas/mod.ts";
 import ollama from "npm:ollama";

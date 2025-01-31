@@ -1,5 +1,6 @@
 # personal
 .env
+cstandalone.bat
 
 # dynamic files
 logcat.out
@@ -8,3 +9,6 @@ last-pid.txt
 log/*
 tls-rs/target
 http/config.json
+
+# for other reasons
+bin/2.1.9/deno-2.1.9.zip

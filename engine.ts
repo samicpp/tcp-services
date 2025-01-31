@@ -1,5 +1,6 @@
 import * as compress from "jsr:@deno-library/compress";
 import "./docs.d.ts";
+import "./lib.deno.d.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.97.0/encoding/base64.ts";
 import { createHash } from "https://deno.land/std@0.97.0/hash/mod.ts";
 import HPACK from "npm:hpack";

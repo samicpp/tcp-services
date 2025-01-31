@@ -1,3 +1,4 @@
+import "./lib.deno.d.ts";
 const deno=Deno;
 const tc={
     e:TextEncoder.prototype.encode.bind(new TextEncoder),
