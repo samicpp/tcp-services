@@ -3,5 +3,6 @@
     "https://cppdev.dev":{"dir":"0"},
     "https://www.cppdev.dev":{"dir":"0"},
     "https://t.cppdev.dev":{"dir":"70","router":"always.dyn.txt"},
-    "https://mc.cppdev.dev":{"dir":"mc"}
+    "https://mc.cppdev.dev":{"dir":"mc"},
+    "https://o.cppdev.dev":{"dir":"opdr"}
 }

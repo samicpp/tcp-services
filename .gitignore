@@ -1,6 +1,7 @@
 # personal
 .env
 cstandalone.bat
+http/opdr
 
 # dynamic files
 logcat.out
