@@ -111,16 +111,21 @@ await logfile.log("system",`start of ${import.meta.url}`);
 
 if(args.opt.help)logsole.log();
 
-let envOnly=Boolean(deno.env.get("envonly"));
+let envOnly=parseInt(deno.env.get("envonly")||"0");
 
 
 let ports=envOnly?(deno.env.get("http")?.split(";")||[]):(args.opt.http||[]);
 let sports=envOnly?(deno.env.get("https")?.split(";")||[]):(args.opt.https||[]);
 let dports=envOnly?(deno.env.get("dyn")?.split(";")||[]):(args.opt.dyn||[]);
-let silent=envOnly?Boolean(deno.env.get("silent")):(args.opt.silent||args.sopt.includes("s"));
+let silent=envOnly?parseInt(deno.env.get("silent")||"0"):(args.opt.silent||args.sopt.includes("s"));
+
+if(ports[0]==="")ports=[];
+if(sports[0]==="")sports=[];
+if(dports[0]==="")dports=[];
 
 logsole.allow=!silent;
 
+console.log(ports,sports,dports,silent);
 
 let allPerms=0;[
     deno.permissions.querySync({ name: "net" }),
@@ -134,7 +139,7 @@ if(allPerms!=4){
     deno.exit(1);
 }
 
-let useTls=Boolean(deno.env.get("useTls"));
+let useTls=parseInt(deno.env.get("useTls")||"0");
 
 
 let tlsopt: TlsOptions;
