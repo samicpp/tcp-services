@@ -270,6 +270,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
             dyn[get].state.active=true;
             new Promise(r=>r(mod.init(socket,url,get,opt,()=>{dyn[get].state.active=false},dyn[get],imports))).catch(e=>{logsole.error(e);dyn[get].state.active=false});
           };
+          //if(dyn[get].state?.allowCaching)
         }else if(last.endsWith(".async.js")){
           logsole.log("executing js code");
           dynamic=true;

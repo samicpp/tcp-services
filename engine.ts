@@ -244,7 +244,7 @@ class Engine extends StandardMethods{
 
       let encodings=this.client?.headers["accept-encoding"];
       //console.log("encodings",encodings,encodings&&encodings.includes("gzip"))
-      if(encodings&&encodings.includes("gzip"))this.compress=true;
+      if(encodings&&encodings.includes("gzip"))this.compress=true; //CHANGE LATER
     }
     #client;
     get client(): Client|null {
@@ -310,7 +310,7 @@ class Engine extends StandardMethods{
     get#headers(){return {...this.#userHeaders,...this.#sysHeaders}};
     #headersSent = false;
     #headersPromise: Promise<void>;
-    async #writeTcp(data){return await this.#tcp.write(data).catch(e=>e);};
+    async #writeTcp(data){if(libOpt.debug)console.log("write tcp",this.#td.decode(data),data)/*CHANGE LATER*/;return await this.#tcp.write(data).catch(e=>e);};
     #headerString(){
       let headers: string[] = [];
       for (let k in this.#headers) {
@@ -319,7 +319,7 @@ class Engine extends StandardMethods{
       }
       return `HTTP/1.1 ${this.status} ${this.statusMessage}\r\n${headers.join("\r\n")}\r\n\r\n`;
     }
-    async #sendHeaders(length:number): Promise<void> {
+    async #sendHeaders(length?:number): Promise<void> {
       if (!this.#headersSent) {
         let resolve;
         this.#headersPromise = new Promise(r=>resolve=r);
@@ -359,22 +359,31 @@ class Engine extends StandardMethods{
     }
     headers(): Record<string,string>{ return {...this.#headers}; }
     #written:number[]=[];
-    async #writeChunk(buf:ArrayBuffer): Promise<void>{
-      await this.#writeTcp(this.#te.encode(buf.byteLength.toString(16)+"\r\n"));
+    async #writeChunk(buf:Uint8Array): Promise<void>{
+      if(false&&libOpt.debug){
+        console.log("chunk");
+        console.log((buf.byteLength.toString(16)+"\r\n"));
+        console.log(buf,this.#td.decode(buf));
+        console.log("\r\n");
+      };
+      /*await this.#writeTcp(this.#te.encode(buf.byteLength.toString(16)+"\r\n"));
       await this.#writeTcp(buf);
-      await this.#writeTcp(this.#te.encode("\r\n"));
+      await this.#writeTcp(this.#te.encode("\r\n"));*/
+      await this.#writeTcp(new Uint8Array([...this.#te.encode(buf.length.toString(16)),13,10,...buf,13,10]));
     }
     async writeText(text: string): Promise<void> {
       if(!this.enabled)return;
       if(this.#closed)return;
-      this.#sysHeaders["Transfer-Encoding"]="chunked";
+      this.#sysHeaders["Transfer-Encoding"]="chunked"//+this.compress?","+this.encoding:"";
+      //this.#sysHeaders["Connection"]="keep-alive";
       let b=this.#te.encode(text);
       let w=b;
       this.#written.push(...b);
       if(this.compress&&this.encoding=="gzip"){
         try{
           w=compress.gzip(b);
-          this.setHeader("Content-Encoding", "gzip");
+          this.#sysHeaders["Content-Encoding"]="gzip";
+          //this.setHeader("Content-Encoding", "gzip");
         } catch(err){
           ;
         };
@@ -385,14 +394,16 @@ class Engine extends StandardMethods{
     async writeBuffer(buffer: Uint8Array): Promise<void> {
       if(!this.enabled)return;
       if(this.#closed)return;
-      this.#sysHeaders["Transfer-Encoding"]="chunked";
+      this.#sysHeaders["Transfer-Encoding"]="chunked";//+this.compress?","+this.encoding:"";
+      //this.#sysHeaders["Connection"]="keep-alive";
       let b=buffer;
       let w=b;
       this.#written.push(...b);
       if(this.compress&&this.encoding=="gzip"){
         try{
           w=compress.gzip(b);
-          this.setHeader("Content-Encoding", "gzip");
+          this.#sysHeaders["Content-Encoding"]="gzip";
+          //this.setHeader("Content-Encoding", "gzip");
         } catch(err){
           ;
         };
@@ -400,7 +411,7 @@ class Engine extends StandardMethods{
       await this.#sendHeaders(w.byteLength);
       await this.#writeChunk(w);
     }
-    async close(data?: string | ArrayBuffer): Promise<void> {
+    async close(data?: string | Uint8Array): Promise<void> {
       if(!this.enabled)return;
       if(this.#closed)return;
       //await this.#sendHeaders(0);
@@ -409,13 +420,13 @@ class Engine extends StandardMethods{
       if (typeof b != "object")b=new Uint8Array();
       if(this.#headersSent){
         if (b) await this.writeBuffer(b);
-        await this.#writeTcp(this.#te.encode("0\r\n\r\n"));
+        await this.#writeTcp(new Uint8Array([48,13,10,13,10]));
       } else {
         let w=b;
         if(this.compress&&this.encoding=="gzip"){
           try{
             w=compress.gzip(b);
-            this.setHeader("Content-Encoding", "gzip");
+            this.#sysHeaders["Content-Encoding"]="gzip";
           } catch(err){
             ;
           };
@@ -430,7 +441,7 @@ class Engine extends StandardMethods{
       }
       if(b)this.#written.push(...b);
       this.#headersSent=true;
-      if(this.#headers["Connection"]!="keep-alive")this.#tcp.close();
+      if(false&&this.#headers["Connection"]!="keep-alive")this.#tcp.close();
       this.#closed=true;
     }
     written(): Uint8Array{ return new Uint8Array(this.#written); }
@@ -1068,6 +1079,7 @@ class Engine extends StandardMethods{
         async#sendHead(end?:boolean){
           if(!this.#sentHead){
             const head=this.#getHeadBuff(!!end);
+            this.#sentHead=true;
             return await this.#write(head.buffer);
           } else return false;
         };
