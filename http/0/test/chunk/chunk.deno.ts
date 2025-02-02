@@ -1,3 +1,5 @@
+import cinit from "../../../../console.ts";
+const [logfile,logsole]=cinit();
 let del:Function;
 let visits=0;
 let imp;
@@ -10,7 +12,7 @@ export async function init(socket, url, get, opt, dele, self, imports){
     socket.setHeader("Content-Type","text/plain");
     let sleep=ms=>new Promise(r=>setTimeout(r,ms));
     for(let i=0;i<5;i++){
-        await socket.writeText("i="+i.toString()+"\n");
+        logsole.log("chunk.deno.ts",await socket.writeText("i="+i.toString()+"\n"));
         await sleep(500);
     };
     socket.close("6")

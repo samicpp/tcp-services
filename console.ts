@@ -22,7 +22,7 @@ export class Logcat{
             append: true,
         }).catch(e=>err=e);
         if(err){
-            this.write=
+            this.write=(...a)=>new Promise(r=>r(a));
             this.log=(...a)=>new Promise(r=>r(a));
             return false
         }
@@ -43,7 +43,7 @@ export class LogcatConsole{
         this.#logcat=logcat;
         const th=this;
         this.#proxy=new Proxy(console,{get(o,p){
-            if(typeof o[p]!="function"||["Console"].includes(p))return o[p];
+            if(typeof o[p]!="function"||["Console"].includes(p.toString()))return o[p];
             return async function(...args){
                 try{
                     let s:string[]=[];

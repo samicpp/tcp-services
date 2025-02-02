@@ -132,7 +132,7 @@ let allPerms=0;[
     deno.permissions.querySync({ name: "env" }),
     deno.permissions.querySync({ name: "read" }),
     deno.permissions.querySync({ name: "write" }),
-].forEach(e=>allPerms+=e.state=="granted");
+].forEach(e=>allPerms+=e.state=="granted"?1:0);
 
 if(allPerms!=4){
     logsole.error(`need net, env and file permissions`);
