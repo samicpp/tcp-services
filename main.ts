@@ -10,8 +10,8 @@ let logcatPath=deno.env.get("logcatfile");
 
 //Error.stackTraceLimit = 1000;
 
-setOpt("debug",true);
-setOpt("eventDbg",true);
+setOpt("debug",false);
+setOpt("eventDbg",false);
 
 let args:{
     opt:Record<string,string[]>;
@@ -108,12 +108,16 @@ await logfile.log("system",`start of ${import.meta.url}`);
 
 //console.log("options",args);
 
-if(args.opt.help)logsole.log()
 
-let ports=args.opt.http||[];
-let sports=args.opt.https||[];
-let dports=args.opt.dyn||[];
-let silent=args.opt.silent||args.sopt.includes("s");
+if(args.opt.help)logsole.log();
+
+let envOnly=Boolean(deno.env.get("envonly"));
+
+
+let ports=envOnly?(deno.env.get("http")?.split(";")||[]):(args.opt.http||[]);
+let sports=envOnly?(deno.env.get("https")?.split(";")||[]):(args.opt.https||[]);
+let dports=envOnly?(deno.env.get("dyn")?.split(";")||[]):(args.opt.dyn||[]);
+let silent=envOnly?Boolean(deno.env.get("silent")):(args.opt.silent||args.sopt.includes("s"));
 
 logsole.allow=!silent;
 
@@ -130,13 +134,23 @@ if(allPerms!=4){
     deno.exit(1);
 }
 
+let useTls=Boolean(deno.env.get("useTls"));
 
-let tlsopt: TlsOptions={
-    key: await deno.readTextFile(deno.env.get("keyfile")).catch(e=>""),
-    cert: await deno.readTextFile(deno.env.get("certfile")).catch(e=>""),
-    ca: await deno.readTextFile(deno.env.get("cafile")).catch(e=>""),
-    alpnProtocols: ["h2","http/1.1"],
-};
+
+let tlsopt: TlsOptions;
+if(useTls){
+    tlsopt={
+        key: await deno.readTextFile(deno.env.get("keyfile")||"").catch(e=>""),
+        cert: await deno.readTextFile(deno.env.get("certfile")||"").catch(e=>""),
+        ca: await deno.readTextFile(deno.env.get("cafile")||"").catch(e=>""),
+        alpnProtocols: deno.env.get("alpn")?.split(";"),
+    };
+} else {
+    tlsopt={
+        key:"",
+        cert: "",
+    };
+}
 
 
 const tcp: Engine=new Engine();
@@ -154,10 +168,10 @@ tcp.on("connect",async({socket,client}:HttpSocket)=>{
         const h2c=await socket.http2();
         if(h2c){
             http.listener2(h2c);
-            console.log("using http2");
+            logsole.log("using http2");
             return;
         } else {
-            console.log("couldn't upgrade to http2");
+            logsole.log("couldn't upgrade to http2");
             //socket.deny();
             return;
         }
@@ -170,7 +184,7 @@ tcp.on("http2",http.listener2);
 tcp.upgrade=true;
 
 logsole.log('pid: ',deno.pid);
-await deno.writeTextFile("last-pid.txt", deno.pid);
+await deno.writeTextFile("last-pid.txt", deno.pid.toString());
 
 let lastBeat=Date.now();
 setInterval(()=>{

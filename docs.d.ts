@@ -474,7 +474,7 @@ interface Http2Socket extends StandardMethods{
     readonly type: string;
 
     /**
-     * Encodes with HPACK (look at rfc7541 for details)
+     * Encodes with HPACK (look at rfc7541 for details).
      * @param entr Contains the headers in this format: `[ [ "name", "value" ], ...etc ]`.
      */
     hpackEncode(entr:string[][]):Uint8Array;

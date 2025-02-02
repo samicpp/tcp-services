@@ -73,7 +73,7 @@ export class LogcatConsole{
 
 let logcat:Logcat;
 let logsole:LogcatConsole;
-export default function setup(logPath?:string){
+export default function setup(logPath?:string):[Logcat,LogcatConsole]{
     if(!logcat&&!logsole){
         logcat=new Logcat(logPath);
         logsole=new LogcatConsole(logcat);
