@@ -89,6 +89,8 @@ This is a list of things i might implement in the future.
 - [ ] Make the service.
 - [ ] TLS decryption.
 
+# Credits
+This project makes use of [dancrumbs](https://github.com/dancrumb) [hpack decoder](https://github.com/dancrumb/hpack)
 
 # License
 

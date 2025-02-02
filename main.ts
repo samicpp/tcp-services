@@ -10,8 +10,8 @@ let logcatPath=deno.env.get("logcatfile");
 
 //Error.stackTraceLimit = 1000;
 
-setOpt("debug",false);
-setOpt("eventDbg",false);
+setOpt("debug",true);
+setOpt("eventDbg",true);
 
 let args:{
     opt:Record<string,string[]>;
@@ -135,7 +135,7 @@ let tlsopt: TlsOptions={
     key: await deno.readTextFile(deno.env.get("keyfile")).catch(e=>""),
     cert: await deno.readTextFile(deno.env.get("certfile")).catch(e=>""),
     ca: await deno.readTextFile(deno.env.get("cafile")).catch(e=>""),
-    alpnProtocols: ["http/1.1","h2"],
+    alpnProtocols: ["h2","http/1.1"],
 };
 
 

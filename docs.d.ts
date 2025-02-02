@@ -6,19 +6,12 @@
 interface StandardMethods{
     /**
      * Listens to a specific event.
+     * Can be a custom event.
      * 
      * @param name Name of the event.
      * @param listener Function that listens to the event.
-     */
-    on(name:string,listener:(event:HttpSocket|Http2Stream|Http2Socket|WsFrame|Error|any)=>void|Promise<void>):void;
-
-    /**
-     * Emits an event.
+     * 
      * Heres a list of possible events:
-     * 
-     * @param name Event name.
-     * @param object Event object wich listeners will be invoked with.
-     * 
      * @event error Event which will be triggered when anything went wrong. Dispatched with `Error`.
      * @event nulldata Unique to Engine. Triggered when client didn't send any data.
      * @event frame Unique to WebSocket. Triggered when client sends a web socket frame. Dispatched with `WsFrame`.
@@ -27,6 +20,16 @@ interface StandardMethods{
      * @event close Unique to Http2Socket. Triggered when a client has sent a goaway frame. Dispatched with `Http2Frame`.
      * @event closed Unique to Http2Socket. Triggered when connection has closed. Dispatched with `Http2Socket`.
      * @event http2 Unique to Engine. Triggered when a client sends a http2 request without a http1 upgrade request first. Dispatched with `Http2Socket`.
+     */
+    on(name:string,listener:(event:HttpSocket|Http2Stream|Http2Socket|WsFrame|Error|any)=>void|Promise<void>):void;
+
+    /**
+     * Emits an event.
+     * Can be a custom event.
+     * 
+     * @param name Event name.
+     * @param object Event object wich listeners will be invoked with.
+     * 
      */
     emit(name:string,object:HttpSocket|Http2Stream|Http2Socket|Http2Frame|WsFrame|Error|any):void;
 }
@@ -471,6 +474,18 @@ interface Http2Socket extends StandardMethods{
     readonly type: string;
 
     /**
+     * Encodes with HPACK (look at rfc7541 for details)
+     * @param entr Contains the headers in this format: `[ [ "name", "value" ], ...etc ]`.
+     */
+    hpackEncode(entr:string[][]):Uint8Array;
+
+    /**
+     * Decodes hpack data.
+     * @param buff HPACK buffer.
+     */
+    hpackDecode(buff:Uint8Array):string[][];
+
+    /**
      * Listens for a specific event
      * 
      * Used events:
@@ -497,6 +512,8 @@ interface Http2Frame{
         readonly flags: number,
         readonly stream: number[],
         readonly payload: number[],
+        readonly extraPayload: number[],
+        readonly padding: number[],
     },
 
     /**
@@ -545,6 +562,11 @@ interface Http2Frame{
      * @property int An object with the settings where the property is the integer form of the setting.
      */
     readonly settings:{readonly str:Record<string,number>,readonly int:Record<number,number>},
+
+    /**
+     * 
+     */
+    //readonly extraLength:number;
 }
 
 /**

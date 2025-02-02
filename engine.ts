@@ -3,7 +3,12 @@ import "./docs.d.ts";
 import "./lib.deno.d.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.97.0/encoding/base64.ts";
 import { createHash } from "https://deno.land/std@0.97.0/hash/mod.ts";
+import * as streams from "https://deno.land/std@0.153.0/streams/mod.ts";
 import HPACK from "npm:hpack";
+import * as dancrumb_hpack from "./dancrumb-hpack/mod.ts";
+import hpackjs from "npm:hpack.js";
+
+const {readableStreamFromIterable}=streams;
 //const hpack=new HPACK;
 //const {gzip}=compress
 
@@ -1069,6 +1074,7 @@ class Engine extends StandardMethods{
 
         get sizeLeft(){return flow[sid]};
         #flowSize(len:number,stid:number=sid):boolean{
+          if(!flow[stid])flowInit(stid);
           return flow[stid]-len>0&&flow[0]-len>0;
         }
         #flowPass(len:number,stid:number=0):boolean{
@@ -1184,7 +1190,55 @@ class Engine extends StandardMethods{
       return hand;
     };
 
-    #hpack=new HPACK;
+    
+    get#hpack(){return new HPACK};
+    /*#hpackContext={
+      encode:new dancrumb_hpack.EncodingContext(),
+      decode:new dancrumb_hpack.DecodingContext(),
+    };*/
+    #hpackTableSize=4096;
+    get hpackTableSize(){return this.#hpackTableSize};
+    set hpackTableSize(s:number){if(s>=0)this.#hpackTableSize=parseInt(s.toString())};
+    hpackDecode(buff:Uint8Array,method=0):string[][]{
+      if(method==0){
+        //hpack
+        return new HPACK().decode(buff);
+      } else if(method==1){
+        // hpack.js
+        let entr:string[][]=[];
+        const dec=hpackjs.decompressor.create({table:{size:this.#hpackTableSize}});
+        dec.write(buff);
+        dec.execute();
+        let last=dec.read();
+        let arr=[last];
+        while((last=dec.read())!=null)arr.push(last);
+        for(let {name,value} of arr)entr.push([name,value]);
+        return entr;
+      } else if(method==2){
+        // dancrumb
+        return[];
+      } else {
+        return[];
+      }
+    };
+    hpackEncode(entr:string[][],method=0):Uint8Array{
+      if(method==0){
+        // hpack
+        return new HPACK().encode(entr);
+      }else if(method==1){
+        // hpack.js
+        let arr:{name:string,value:string}[]=[];
+        const com=hpackjs.compressor.create({table:{size:this.#hpackTableSize}});
+        for(let [k,v] of entr)arr.push({name:k,value:v});
+        com.write(arr);
+        return com.read();
+      }else if(method==2){
+        // dancrumb
+        return new Uint8Array;
+      }else{
+        return new Uint8Array;
+      }
+    }
     #frameTypes={
       int:{
         0 : "data",
@@ -1255,6 +1309,8 @@ class Engine extends StandardMethods{
     #frame(streamId:number,type:number|string,options?:{flags?:number|string[],data?:string|Uint8Array,headers?:Record<string,string>,settings?:Record<string|number,number>,error?:{code:number,lastStreamID?:number,message?:Uint8Array|string},targetStreamId?:number}){
       if(!options)options={};
 
+      if(libOpt.debug)console.log("make frame",streamId,type,options);
+
       let flags=options?.flags||0;
       let data=options?.data||new Uint8Array;
       let headers=options?.headers||{};
@@ -1266,7 +1322,7 @@ class Engine extends StandardMethods{
       
       let flagByte=parseInt(flags.toString());
       let typeByte=parseInt(type.toString());
-      let heh:Uint8Array=this.#hpack.encode(Object.entries(headers));
+      let heh:Uint8Array=this.hpackEncode(Object.entries(headers),1);
       let settList:number[]=[];
       let settBuff:Uint8Array=new Uint8Array;
       let errBuff:Uint8Array=new Uint8Array;
@@ -1334,7 +1390,10 @@ class Engine extends StandardMethods{
         const types=this.#frameTypes;
         const flags=this.#frameFlags;
         const settingsList=this.#settingsList;
-        const hpack=this.#hpack;
+        //const hpack=()=>this.#hpack;
+        const th=this;
+        //const dancrumb=(b:Uint8Array)=>this.#dancrumb(b);
+        if(libOpt.debug)console.log("packet arg",buff);
 
         function frame(buff){
 
@@ -1343,6 +1402,8 @@ class Engine extends StandardMethods{
           const stream=[...buff.subarray(5,9)];
           const lenInt=parseInt(length.map(v=>v.toString(16).padStart(2,"0")).join(''),16);
           const streamId=parseInt(stream.map(v=>v.toString(16).padStart(2,"0")).join(''),16);
+          const extraLen=[0,1].includes(buff[3])?(buff[4]&0x08?1:(buff[4]&0x20?5:0)):0;
+          const padLength=[0,1].includes(buff[3])?(buff[4]&0x08?buff[9]:0):0
 
           const svkl:Record<string,number>={};
           const nvkl:Record<number,number>={};
@@ -1352,12 +1413,14 @@ class Engine extends StandardMethods{
               type: buff[3],
               flags: buff[4],
               stream: stream,
-              payload: [...buff.subarray(9,9+lenInt)],
+              payload: [...buff.subarray(9+extraLen,9+lenInt+extraLen-padLength)],
+              extraPayload: [...buff.subarray(9,9+extraLen)],
+              padding: [...buff.subarray(9+lenInt+extraLen-padLength,9+lenInt+extraLen+padLength)],
             },
             type: types.int[buff[3]],
 
             flags: [],
-            length: lenInt,
+            length: lenInt+extraLen-padLength,
             streamId: streamId,
 
             buffer:new Uint8Array,
@@ -1371,6 +1434,8 @@ class Engine extends StandardMethods{
 
             //_settingsRaw:[],
             settings:{str:svkl,int:nvkl},
+            
+            //extraLength:extraLen,
           };
 
           if([0,1].includes(frame.raw.type)){
@@ -1380,10 +1445,18 @@ class Engine extends StandardMethods{
             if(frame.raw.flags & 0x20)frame.flags.push("priority");
           } else if([4,6].includes(frame.raw.type)&&frame.raw.flags==1)frame.flags.push("ack");
 
+
           frame.buffer=new Uint8Array(frame.raw.payload);
 
-          if(frame.raw.type==1){
-            let entr=hpack.decode(frame.buffer);
+          if(libOpt.debug)console.log("preframe",frame);
+
+          if(frame.raw.type==1&&frame.buffer.length>0){
+            let entr:string[][]=[];
+            try{
+              entr=th.hpackDecode(frame.buffer,1);
+            }catch(err){
+              th.emit("error",err);
+            };
             for(let [k,v] of entr)frame.headers[k]=v;
           }
           else if(frame.raw.type==4){
@@ -1443,6 +1516,7 @@ class Engine extends StandardMethods{
       }catch(err){this.emit("error",err);};
     };
   };
+  
 
   async #listener(server, conn:Deno.Conn, type:string, cacheId: number, remoteAddr=conn.remoteAddr): Promise<void> {
     //console.log("connection",remoteAddr);
