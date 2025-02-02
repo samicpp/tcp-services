@@ -10,8 +10,8 @@ let logcatPath=deno.env.get("logcatfile");
 
 //Error.stackTraceLimit = 1000;
 
-setOpt("debug",true);
-setOpt("eventDbg",true);
+setOpt("debug",false);
+setOpt("eventDbg",false);
 
 let args:{
     opt:Record<string,string[]>;
