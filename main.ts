@@ -10,8 +10,8 @@ let logcatPath=deno.env.get("logcatfile");
 
 //Error.stackTraceLimit = 1000;
 
-setOpt("debug",false);
-setOpt("eventDbg",false);
+setOpt("debug",true);
+setOpt("eventDbg",true);
 
 let args:{
     opt:Record<string,string[]>;
@@ -125,7 +125,7 @@ if(dports[0]==="")dports=[];
 
 logsole.allow=!silent;
 
-console.log(ports,sports,dports,silent);
+logsole.log(ports,sports,dports,silent);
 
 let allPerms=0;[
     deno.permissions.querySync({ name: "net" }),

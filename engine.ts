@@ -1199,7 +1199,7 @@ class Engine extends StandardMethods{
     #hpackTableSize=4096;
     get hpackTableSize(){return this.#hpackTableSize};
     set hpackTableSize(s:number){if(s>=0)this.#hpackTableSize=parseInt(s.toString())};
-    hpackDecode(buff:Uint8Array,method=0):string[][]{
+    #hpackDecode(buff:Uint8Array,method=0):string[][]{
       if(method==0){
         //hpack
         return new HPACK().decode(buff);
@@ -1221,7 +1221,7 @@ class Engine extends StandardMethods{
         return[];
       }
     };
-    hpackEncode(entr:string[][],method=0):Uint8Array{
+    #hpackEncode(entr:string[][],method=0):Uint8Array{
       if(method==0){
         // hpack
         return new HPACK().encode(entr);
@@ -1238,7 +1238,23 @@ class Engine extends StandardMethods{
       }else{
         return new Uint8Array;
       }
-    }
+    };
+    hpackDecode(buff:Uint8Array,method=0,tries=3):string[][]{
+      let res:string[][]=[],lerr=null,s=false;
+      for(let i=0;i<tries;i++){
+        try{res=this.#hpackDecode(buff,method);s=true;break}catch(err){this.emit("error",err);lerr=err};
+      };
+      if(!s)throw new Error("couldn't decode hpack");
+      return res;
+    };
+    hpackEncode(entr:string[][],method=0,tries=3):Uint8Array{
+      let res:Uint8Array=new Uint8Array,lerr=null,s=false;
+      for(let i=0;i<tries;i++){
+        try{res=this.#hpackEncode(entr,method);s=true;break}catch(err){this.emit("error",err);lerr=err};
+      };
+      if(!s)throw new Error("couldn't decode hpack");
+      return res;
+    };
     #frameTypes={
       int:{
         0 : "data",
@@ -1413,14 +1429,14 @@ class Engine extends StandardMethods{
               type: buff[3],
               flags: buff[4],
               stream: stream,
-              payload: [...buff.subarray(9+extraLen,9+lenInt+extraLen-padLength)],
+              payload: [...buff.subarray(9+extraLen,9+lenInt-padLength)],
               extraPayload: [...buff.subarray(9,9+extraLen)],
               padding: [...buff.subarray(9+lenInt+extraLen-padLength,9+lenInt+extraLen+padLength)],
             },
             type: types.int[buff[3]],
 
             flags: [],
-            length: lenInt+extraLen-padLength,
+            length: lenInt-extraLen-padLength,
             streamId: streamId,
 
             buffer:new Uint8Array,
@@ -1453,8 +1469,13 @@ class Engine extends StandardMethods{
           if(frame.raw.type==1&&frame.buffer.length>0){
             let entr:string[][]=[];
             try{
-              entr=th.hpackDecode(frame.buffer,1);
+              entr=th.hpackDecode(frame.buffer,1,3);
             }catch(err){
+              try{
+                entr=th.hpackDecode(frame.buffer,0,1);
+              }catch(err){
+                th.emit("error",err);
+              }
               th.emit("error",err);
             };
             for(let [k,v] of entr)frame.headers[k]=v;

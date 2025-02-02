@@ -121,11 +121,15 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
         }().catch(e=>e);
       }
     };
-    try{url=new SpecialURL(`${proxied?client.headers["x-scheme"]:(socket.type=="tcp::tls"?"https":"http")}://${proxied?client.headers["x-forwarded-host"]:client.headers.host}${client.path}`);}catch(err){logsole.error(err);isValid=false};
+    try{url=new SpecialURL(`${proxied?client.headers["x-scheme"]:(socket.type=="tcp::tls"?"https":"http")}://${(proxied?client.headers["x-forwarded-host"]:client.headers.host)||"unknown"}${client.path||"/"}`);}catch(err){logsole.error(err);isValid=false};
     if(!isValid)url=new SpecialURL(`about:blank#invalid`);
     
     logsole.log(url.toString());
-    logsole.log(client.address)
+    logsole.log(client.address);
+
+    /*if(url.hostname=="unkown"&&client.httpVersion=="HTTP/2"){
+      socket.deny();
+    }*/
     
 
     async function e403(get:string,err:Error){
