@@ -16,7 +16,7 @@ async function handler(ws:WebSocket,frame:WsFrame){
     else if(frame.opname=="text"){
         logsole.log("rchat.deno.ts got something");
         messages.push({role:"user",content:td.decode(frame.payload)});
-        ws.send(await genRes());
+        ws.sendText(await genRes());
     }
     else if(frame.opname=="close"&&!closing){
         logsole.log("rchat.deno.ts client closing", td.decode(frame.close.message));
@@ -37,10 +37,23 @@ async function handler(ws:WebSocket,frame:WsFrame){
 export default async function(socket, url, get, opt){
     del();
 }
-export async function init(socket:HttpSocket|PseudoHttpSocket, url: SpecialURL, get, opt, dele, self, imports){
+export async function init({client,socket}:HttpSocket|PseudoHttpSocket, url: SpecialURL, get, opt, dele, self, imports){
     del=dele
     imp=imports;
     ;
+    if(client.headers["upgrade"]=="websocket"){
+        console.log("ws.deno.ts websocket upgrade");
+        let ws=await socket.websocket();
+        //if(w)ws=w;
+        if(!ws) return console.log("ws.deno.ts couldnt upgrade");
+
+        console.log("ws.deno.ts upgraded connection",ws);
+        ws.on("frame",f=>handler(ws,f));
+
+    }else{
+        await socket.close("WS only"); 
+    }
+
     del();
     //await socket.writeText("hello");
     //await socket.close(); 

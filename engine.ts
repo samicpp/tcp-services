@@ -1223,7 +1223,7 @@ class Engine extends StandardMethods{
         dec.execute();
         let last=dec.read();
         let arr=[last];
-        while((last=dec.read())!=null)arr.push(last);
+        while((last=dec.read())!=null)try{arr.push(last)}catch(err){};
         for(let {name,value} of arr)entr.push([name,value]);
         return entr;
       } else if(method==2){
@@ -1251,12 +1251,12 @@ class Engine extends StandardMethods{
         return new Uint8Array;
       }
     };
-    hpackDecode(buff:Uint8Array,method=0,tries=3):string[][]{
+    hpackDecode(buff:Uint8Array,...methods:number[]):string[][]{
       let res:string[][]=[],lerr=null,s=false;
-      for(let i=0;i<tries;i++){
-        try{res=this.#hpackDecode(buff,method);s=true;break}catch(err){this.emit("error",err);lerr=err};
+      for(let i=0;i<methods.length;i++){
+        try{res.push(...this.#hpackDecode(buff,methods[i]));s=true;break}catch(err){this.emit("error",err);lerr=err};
       };
-      if(!s)throw new Error("couldn't decode hpack");
+      //if(!s)throw new Error("couldn't decode hpack");
       return res;
     };
     hpackEncode(entr:string[][],method=0,tries=3):Uint8Array{
@@ -1481,15 +1481,16 @@ class Engine extends StandardMethods{
           if(frame.raw.type==1&&frame.buffer.length>0){
             let entr:string[][]=[];
             try{
-              entr=th.hpackDecode(frame.buffer,1,3);
+              entr=th.hpackDecode(frame.buffer,0,0,1);
             }catch(err){
-              try{
-                entr=th.hpackDecode(frame.buffer,0,1);
-              }catch(err){
-                th.emit("error",err);
-              }
               th.emit("error",err);
             };
+            /*try{
+              entr.push(...th.hpackDecode(frame.buffer,1,1));
+            }catch(err){
+              th.emit("error",err);
+            };*/
+            if(libOpt.debug)console.log("header entries",entr);
             for(let [k,v] of entr)frame.headers[k]=v;
           }
           else if(frame.raw.type==4){
