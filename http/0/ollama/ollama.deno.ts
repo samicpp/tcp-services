@@ -4,11 +4,15 @@ let del:Function;
 let visits=0;
 let imp;
 let messages:{role:string,content:string}[]=[];
+let mAllow=["llama3.2","deepseek-r1:1.5b","deepseek-r1:7b"];
+let model="deepseek-r1:1.5b";
+
 export default async function(socket, url, get, opt){
     //await socket.writeText(res);
     //await socket.close(res); 
     socket.setHeader("Content-Type","text/plain");
     let prompt=url.hash.replace('#',"")||"hello";
+    model=url.searchParams.getAll("m")?.[0]||model;
     prompt=decodeURIComponent(prompt);
     messages.push({role:"user",content:prompt});
     let res=await genRes(socket);
@@ -21,6 +25,7 @@ export async function init(socket:HttpSocket|PseudoHttpSocket, url: SpecialURL, 
     imp=imports;
     socket.setHeader("Content-Type","text/plain; charset=utf-8");
     let prompt=url.hash.replace('#',"")||"hello";
+    model=url.searchParams.getAll("m")?.[0]||model;
     prompt=decodeURIComponent(prompt);
     messages.push({role:"user",content:prompt});
     let res=await genRes(socket);
@@ -33,9 +38,10 @@ async function genRes(socket:HttpSocket|PseudoHttpSocket){
     let res="";
     logsole.log("ollama.deno.ts",messages);
     try{
+        if(!mAllow.includes(model))model="deepseek-r1:1.5b";
         const st=await imp.ollama.chat({
             stream: true,
-            model: "deepseek-r1:1.5b",
+            model: model,
             messages,
         });
         logsole.log("ollama.deno.ts stream", st);

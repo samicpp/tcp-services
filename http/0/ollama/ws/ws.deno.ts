@@ -7,6 +7,8 @@ let messages:{role:string,content:string}[]=[];
 let td=new TextDecoder;
 let te=new TextEncoder;
 let closing=false;
+let mAllow=["llama3.2","deepseek-r1:1.5b","deepseek-r1:7b"];
+let model="deepseek-r1:1.5b";
 
 async function handler(ws:WebSocket,frame:WsFrame){
     logsole.log("ws.deno.ts frame",frame);
@@ -41,6 +43,8 @@ export async function init({client,socket}:HttpSocket|PseudoHttpSocket, url: Spe
     del=dele
     imp=imports;
     ;
+    model=url.searchParams.getAll("m")?.[0]||model;
+    if(!mAllow.includes(model))model="deepseek-r1:1.5b";
     if(client.headers["upgrade"]=="websocket"){
         console.log("ws.deno.ts websocket upgrade");
         let ws=await socket.websocket();
