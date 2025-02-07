@@ -275,8 +275,8 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
           logsole.log("executing js code");
           dynamic=true;
           let t=td.decode(bytes);
-          let f=AsyncFunction("socket,url,get,opt,deno,imports",t);
-          f(socket,url,get,opt,Deno,imports);
+          let f=AsyncFunction("socket,url,get,opt,deno,imports,console",t);
+          await f(socket,url,get,opt,Deno,imports,logsole);//.catch(err=>logsole.error(err));
         }else if(last.endsWith(".pug")){
           logsole.log("compiling pug file")
           let t=td.decode(bytes);
@@ -419,6 +419,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
         //await socket.writeBuffer(bytes);
         //socket.close();
       }  catch (err){
+          await e500(get,err);
           logsole.error(err);
       }
     }
