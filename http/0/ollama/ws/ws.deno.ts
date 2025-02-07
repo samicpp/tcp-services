@@ -68,7 +68,7 @@ async function genRes(){
     try{
         const st=await imp.ollama.chat({
             stream: true,
-            model: "deepseek-r1:1.5b",
+            model: model,
             messages,
         });
         logsole.log("ollama.deno.ts stream", st);
