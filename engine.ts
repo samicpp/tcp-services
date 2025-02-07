@@ -379,7 +379,7 @@ class Engine extends StandardMethods{
       let b=this.#te.encode(text);
       let w=b;
       this.#written.push(...b);
-      if(this.compress&&this.encoding=="gzip"){
+      if(false&&this.compress&&this.encoding=="gzip"){
         try{
           w=compress.gzip(b);
           this.#sysHeaders["Content-Encoding"]="gzip";
@@ -399,7 +399,7 @@ class Engine extends StandardMethods{
       let b=buffer;
       let w=b;
       this.#written.push(...b);
-      if(this.compress&&this.encoding=="gzip"){
+      if(false&&this.compress&&this.encoding=="gzip"){
         try{
           w=compress.gzip(b);
           this.#sysHeaders["Content-Encoding"]="gzip";
