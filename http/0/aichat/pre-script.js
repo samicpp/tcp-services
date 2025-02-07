@@ -1,4 +1,4 @@
-function overlay(html) {
+function overlay(html,options={}) {
     const div = document.createElement("div");
     const divbg = document.createElement("div");
     const sett = {
@@ -21,8 +21,19 @@ function overlay(html) {
     Object.assign(div.style, sett);
     Object.assign(divbg.style, sett, {width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.1)", zIndex:"1000", maxWidth: "100%", maxHeight: "100%"});
     div.innerHTML=html;
-    document.body.appendChild(div);
+    div.classList.add("overlay");
+    divbg.classList.add("overlay", "background");
     document.body.appendChild(divbg);
+    divbg.appendChild(div);
+
+    addEventListener("keydown",async function(keydown){
+        if(!options.noEscape&&keydown.code=="Escape")divbg.style.display="none";
+    });
+    divbg.addEventListener("click",async function(click){
+        if(!options.noEscape&&click.target==divbg)divbg.style.display="none";
+    });
+
+    return divbg;
 };
 
 class StableWS extends EventTarget{
@@ -47,7 +58,8 @@ class StableWS extends EventTarget{
         ws.onmessage=forward;
         ws.onopen=forward;
     };
-    restart(){
+    restart(url=this.#url){
+        this.#url=url;
         this.#ws.close();
         this.#start();
     };
@@ -58,4 +70,36 @@ class StableWS extends EventTarget{
     set onclose(l){this.addEventListener("close",l)};
     set onmessage(l){this.addEventListener("message",l)};
     set onopen(l){this.addEventListener("open",l)};
+}
+
+function createElement(nodeName="div",attributes={},options={}){
+    const el=document.createElement(nodeName);
+    for(let [a,v] of Object.entries(attributes))el.setAttribute(a,v);
+    for(let [p,v] of Object.entries(options)){
+        switch(p.toLowerCase()){
+            case"html":
+            case"innerhtml":
+            case"htmlcontent":
+                el.innerHTML=v;
+                break;
+            
+            case"text":
+            case"content":
+            case"textcontent":
+                el.innerText=v;
+                break;
+
+            case"parent":
+                v.appendChild(el);
+                break;
+
+            case"style":
+                Object.assign(el.style,v);
+                break;
+
+            default:
+                break;
+        };
+    };
+    return el;
 }

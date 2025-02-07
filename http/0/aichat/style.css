@@ -41,3 +41,27 @@ body{
     width: 15%;
     height: 3%;
 }
+
+li.spacer::marker{
+    color: rgba(0,0,0,0);
+}
+li.assistent{
+    color:rgb(194, 255, 255);
+}
+li.user{
+    color:rgb(255, 151, 133);
+}
+
+button.select-model{
+    outline: none;
+    background-color: #222;
+    /*text-shadow: #333 1px 0 10px;*/
+    color:#b4ffdd; /*alice blue*/
+    border: none;
+    border-radius: 5px;
+    line-height: 112%;
+    height: fit-content;
+    width: fit-content;
+    cursor: pointer;
+    /*text-decoration: underline;*/
+}
