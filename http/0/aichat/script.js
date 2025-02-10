@@ -2,14 +2,16 @@ const [selected,text,send,rst,sel,res,list]=document.querySelectorAll(`.side spa
 url=m=>`wss://cppdev.dev//ollama/ws?m=${m}`,
 models=["deepseek-r1:1.5b","llama3.2","deepseek-r1:7b"],
 ws=new StableWS(url(models[0])),
-message=()=>new Promise(r=>ws.onmessage=r);
+message=()=>new Promise(r=>ws.onmessage=r),
+msglog=[];
 
 let model=models[0];
 let mMenu=null;
+let mi=-1;
 //ws.onmessage=console.log
-//ws.onopen=console.log
-//ws.onerror=console.log
-//ws.onclose=console.log
+ws.onopen=e=>send.disabled=false;
+ws.onerror=console.log
+ws.onclose=e=>send.disabled=true;
 
 !async function(){
     while(true){
@@ -21,11 +23,19 @@ let mMenu=null;
     };
 }();
 
-send.addEventListener("click",async function(click){
-    createElement("li",{class:"user"},{text:text.value,parent:list});
+async function sendmsg(msg){
+    mi=msglog.push(msg)-1;
+    createElement("li",{class:"user"},{text:msg,parent:list});
     createElement("li",{class:"spacer"},{parent:list});
-    ws.send(text.value);
-});
+    ws.send(msg);
+};
+
+send.addEventListener("click",e=>{sendmsg(text.value);text.value=""});
+text.addEventListener("keydown",async function(key){
+    if(key.code=="Enter"&&!key.shiftKey){key.preventDefault();sendmsg(text.value);text.value=""}
+    else if(key.code=="ArrowUp"&&(key.altKey||text.value=="")){text.value=msglog[mi--]}
+    else if(key.code=="ArrowDown"&&(key.altKey||text.value=="")){text.value=msglog[mi++]}
+})
 
 rst.onclick=e=>ws.restart();
 

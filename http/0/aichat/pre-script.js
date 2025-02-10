@@ -64,7 +64,7 @@ class StableWS extends EventTarget{
         this.#start();
     };
 
-    send(...e){this.#ws.send(...e)};
+    send(...e){try{this.#ws.send(...e)}catch(err){}};
     
     set onerror(l){this.addEventListener("error",l)};
     set onclose(l){this.addEventListener("close",l)};
