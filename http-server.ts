@@ -26,7 +26,7 @@ const fcaches:Record<string,{date:number,buffer:Uint8Array}>={};
 const cacheTime:number=10_000;
 const dissallow:string[]=envget("dissallow",[]).split(";");
 
-function cache(get,socket:HttpSocket){
+function cache(get:string,socket:HttpSocket|PseudoHttpSocket){
   let d=Date.now();
   //logsole.log("looking for cache",caches[get]?.date<Date.now()-cacheTime);
   if(caches[get]&&caches[get].date>d-cacheTime){
@@ -93,25 +93,59 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
     };
 
     logsole.log("socket client isValid",socket.client.isValid);
-    let url;
+    let url:SpecialURL;
     class SpecialURL extends URL{
+      config: {
+        host:string;
+        regex:RegExp;
+        conf:Record<string,string>;
+        match:Array<string>;
+      }={
+        host:"about:blank",
+        regex:/(?:)/,
+        conf:{"dir":"."},
+        match:[],
+      };
       defdir="http";
       tardir="0";
       router;
       get getStart(){return `./${this.defdir}/${this.tardir}`};
-      ready: Promise<void>;
+      ready: Promise<void|Error>;
       constructor(...args: any[]){
         super(args[0].replace("::","#"));
         let t=this;
         this.ready=async function(){
-          const json = JSON.parse(await readfText(t.defdir+"/config.json"));
+          //const urlDisect=/^(http(s)?:\/\/)|([a-z|0-9|\-|\.]+)|(\/).*$/gs;
+          const json = JSON.parse(await readfText(t.defdir+"/config.json").catch(e=>`[{"default":{"dir":".","error":${JSON.stringify(e.toString())}}}]`));
           
-          let tar=json[t.origin];
-          let dtar=json.default;
-          let utar=tar||dtar;
+          let tar=json[0].default;
+          let url=t.toString();
+          for(let host in json[0]){
+            if(host=="default")continue;
+            try{
+              //let r;
+              let sv=host;
+              if(host[0]!="^")sv='^'+host.replace(/[.*+?^${}()\|[\]\\:]/g, '\\$&');
+              const r=new RegExp(sv);
+              const m=url.match(r);
+              logsole.log(r);
+              if(m){
+                logsole.log("match");
+                tar=json[0][host];
+                t.config={host,regex:r,conf:json[0][host],match:m};
+                //tar.hostReg=r;
+                break;
+              };
+            }catch(err){
+              logsole.error("SpecialURL ",err);
+            }
+          }
+          //let dtar=json[0].default;
+          let utar=tar;
 
           logsole.log("utar",utar);
           t.tardir=utar.dir;
+          //t.tar=utar;
           let rstat=await exists(`${t.defdir}/${utar.dir}/${utar.router}`);
 
           if(rstat){
@@ -122,7 +156,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
       }
     };
     try{url=new SpecialURL(`${proxied?client.headers["x-scheme"]:(socket.type=="tcp::tls"?"https":"http")}://${(proxied?client.headers["x-forwarded-host"]:client.headers.host)||"unknown"}${client.path||"/"}`);}catch(err){logsole.error(err);isValid=false};
-    if(!isValid)url=new SpecialURL(`about:blank#invalid`);
+    if(!isValid||!url)url=new SpecialURL(`about:blank#invalid`);
     
     logsole.log(url.toString());
     logsole.log(client.address);
@@ -451,11 +485,14 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
     let r=await url.ready;
     if(r?.stack)logsole.error(r);
     if(isValid){
-      let get=`./${url.defdir}/${url.tardir}/${url.pathname.replaceAll(/\.+/g, ".").replaceAll(/\.\//g, "/").replace(/\/$/, "")}`;
+      //let ipath="^([a-z])+:\/\/[a-z|0-9|-|\.]+\/.+"
+      let epath=url.config.match[0]?.match(/(?<=(?:https?:\/\/)?[^\/]+)(\/(?!\/).+)/s,"")||[""];
+      let get=`./${url.defdir}/${url.tardir}/${(url.pathname.replace(epath[0],"")).replaceAll(/\.+/g, ".").replaceAll(/\.\//g, "/").replace(/\/$/, "")}`;
       get=get.replaceAll(/\/+/g,"/").replace(/\/+$/,"");
       let rget=`./${url.defdir}/${url.tardir}/${url.router}`;
       logsole.log("get",get);
       logsole.log("rget",rget);
+      logsole.log("extra path",epath,url.config.match);
       
       if(url.router)await handler(rget,{handler,file,directory,get,e400,e403,e404,e409,e500});
       else await handler(get);

@@ -231,14 +231,14 @@ interface HttpSocket extends StandardMethods {
      * 
      * @param buff The binary data to send.
      */
-    writeBuffer(buff: ArrayBuffer): Promise<void>;
+    writeBuffer(buff: Uint8Array): Promise<void>;
 
     /**
      * Closes the connection with an optional final message or data.
      * 
      * @param data Optional. Data to send before closing the connection.
      */
-    close(data?: ArrayBuffer | string): Promise<void>;
+    close(data?: Uint8Array | string): Promise<void>;
 
     /**
      * Returns the written response body as buffer.
@@ -719,14 +719,14 @@ interface PseudoHttpSocket extends StandardMethods{
      * 
      * @param buff The binary data to send.
      */
-    writeBuffer(buff: ArrayBuffer): Promise<void>;
+    writeBuffer(buff: Uint8Array): Promise<void>;
 
     /**
      * Closes the connection with an optional final message or data.
      * 
      * @param data Optional. Data to send before closing the connection.
      */
-    close(data?: ArrayBuffer | string): Promise<void>;
+    close(data?: Uint8Array | string): Promise<void>;
 
     /**
      * Returns the written response body as buffer.
@@ -850,4 +850,14 @@ interface SpecialURL extends URL{
      * In here is the directory in which it will look for files
      */
     readonly tardir: string;
+    
+    /**
+     * Contains some config variables. Shouldn't be used.
+     */
+    readonly config: {
+        host:string;
+        regex:RegExp;
+        conf:Record<string,string>;
+        match:Array<string>;
+    };
 }
