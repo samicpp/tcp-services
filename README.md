@@ -1,27 +1,23 @@
 # Tcp Services
-Currently I only have 1 service.
-- HTTP
+Thist project consists of 2 parts: [A library (`engine.ts`)](#enginets) and [a handler (`http-server.ts` and `main.ts`)](#http-serverts)
 
 ## HTTP
-- [`engine.ts`](/engine.ts): HTTP connection handling.
-- [`http-server.ts`](/http-server.ts): Complex HTTP server using `engine.ts`.
-- [`main.ts`](/main.ts): Responsible for setting up the HTTP server with `http-server.ts` and `engine.ts`
+- [`engine.ts`](#enginets): HTTP connection handling. [File](/engine.ts).
+- [`http-server.ts`](#http-serverts): Complex HTTP server using `engine.ts`. [File](/http-server.ts).
+- [`main.ts`](#maints): Responsible for setting up the HTTP server with `http-server.ts` and `engine.ts`. [File](/main.ts).
 
 This server is running on [www.cppdev.dev](https://www.cppdev.dev/?reff=github). If anything peculiar happens please notify me by [mail](https://gmail.com) to [sami.cplusplus0@gmail.com](mailto:sami.cplusplus0@gmail.com) or make an issue. Same goes for feature requests.
 
 ### engine.ts
 Methods and use cases specified in `docs.ts`.
 Responsible for handling the HTTP connections starting from the TCP level with or without TLS. Supports HTTP/1.1, HTTP/2 and WebSocket.
+This file is located at [`/engine.ts`](/engine.ts).
 
 
 ### http-server.ts
-Dynamic files:
-- `*.dyn.*`: Execute it as a multi line string with parameters Engine.HttpSocket, SpecialURL, the file location as a string. Content type is the same as the file extension
-- `*.mod.ts`: Imports the file, stores the module and first invokes `init` and later invokes `default` with Engine.HttpSocket, SpecialURL, the file location as a string.
-- `*.async.js`: Turns the file into an async function and invokes it with Engine.HttpSocket, SpecialURL, the file location as a string.
-- `*.link`: Contains the path of another file which will be processed as if it were the original file.
-- `*.proxy.json`: Parses the json file and will fetch the destination and show that to the client.
-- `*.ai.json`: Uses ai to generate a response.
+This is a webhandler with some complexity that uses [engine.ts](#enginets) for TCP/HTTP handling. See [Behaviour](#behaviour) for more details.
+On its own this module only exports the handling functions and doesnt actually start a server.
+This file is located at [`/http-server.ts`](/http-server.ts).
 
 #### Behaviour
 If the path is a directory it will look for `index.*` or will look for a file that starts with the name of its parent directory.
@@ -43,6 +39,15 @@ The value of said property is another json object with 2 properties, where's the
 - `dir`: Specify the directory which will be looked in. Is a string.
 - `router`: Specify the filename of the router. Is a string and optionable.
 
+#### Dynamic files:
+- `*.dyn.*`: Execute it as a multi line string with parameters Engine.HttpSocket, SpecialURL, the file location as a string. Content type is the same as the file extension
+- `*.mod.ts`: Imports the file, stores the module and first invokes `init` and later invokes `default` with Engine.HttpSocket, SpecialURL, the file location as a string.
+- `*.async.js`: Turns the file into an async function and invokes it with Engine.HttpSocket, SpecialURL, the file location as a string.
+- `*.link`: Contains the path of another file which will be processed as if it were the original file.
+- `*.proxy.json`: Parses the json file and will fetch the destination and show that to the client.
+- `*.ai.json`: Uses ai to generate a response.
+
+
 ##### Router files
 These type of files will be used regardless of the pathname. Can be used for sites independent of the page.
 
@@ -50,10 +55,47 @@ If said file is a dynamic file (think of `.deno.ts` or `.async.js`) you could co
 
 ### main.ts
 Imports engine.ts, http-server.ts and starts a server.
-You can configure this server with cli parameters.
+You can configure this server with cli parameters or with an .env file.
 - `--http=PORT`: A port to listen on without tls. Can be used multiple times for multiple ports.
 - `--https=PORT`: A port to listen on with tls. Can also be used multiple times for multiple ports.
-- `--dyn=PORT`: A port to listen on with a proxy. The proxy will automatically upgrade the connection to tls if a tls connection was attempted to make (think tls over port 80). IP integrity remained meaning the original ip address is given without `127.0.0.1` like normally.
+- `--dyn=PORT`: A port to listen on with a proxy. The proxy will automatically upgrade the connection to tls if a tls connection was attempted to make (think tls over port 80). The original ip address is given without showing `lo` addresses (like `127.0.0.1`) unlike normally seen with proxies.
+
+#### Env file.
+The env file contains things like the tls cert paths.
+Heres [`example2.env`](/example2.env)
+```env
+# main.ts
+envonly="1"
+
+dyn=""
+http="8080"
+https=""
+
+silent="0"
+
+useTls="0"
+keyfile=""
+certfile=""
+cafile=""
+alpn=""
+
+logcatfile="./logcat.log"
+
+# http-server.ts
+openai_key=""
+
+dissallow=".no;.not"
+```
+
+##### Properties
+- `dissallow`: `http-server.ts` wont send a response if the file ends with any of those file extensions (seperated by `;`).
+- `logcatfile`: Stores console output in there.
+- `envonly`: Makes `main.ts` ingore cli params.
+- `dyn` `http` `https`: Acts like the cli params `dyn` `http` `https`.
+- `silent`: Won't write logs to stdout.
+- `alpn`: ALPN list seperated by `;`.
+- `useTls`: If `1` will try to read the tls files, if `0` won't.
+- `openai_key`: Contains an openai api key for `*.ai.json` files (Dynamic files)[#dynamicfiles]
 
 #### Run examples
 ```bash
@@ -63,6 +105,9 @@ deno run --allow-read --allow-write --allow-net ./main.ts --dyn=80 --dyn=443
 
 # Standard server
 deno run --allow-read --allow-write --allow-net ./main.ts --http=80 --https=443
+
+# Env only
+deno run --allow-read --allow-write --allow-net --env-file ./main.ts
 ```
 
 # TODO
@@ -76,6 +121,7 @@ This is a list of things i might implement in the future.
  - [ ] ~~Full HTTP/3 support~~ (no QUIC support).
  - [x] Store system headers (things like `Content-Length`) separate from user configurable headers.
  - [x] Full HTTP/2 support (not just translation).
+ - [ ] Fix HPACK decoding.
 
 ## http-server.ts
 - [ ] Support FFI and WASM dynamic files.
@@ -84,10 +130,11 @@ This is a list of things i might implement in the future.
 ## main.ts
 - [ ] Read and eval stdin input.
 - [ ] Better CLI arguments.
+- [x] Env support
 
-## tcp-proxy.ts
-- [ ] Make the service.
-- [ ] TLS decryption.
+## ~~tcp-proxy.ts~~
+- [ ] ~~Make the service.~~
+- [ ] ~~TLS decryption.~~
 
 # Credits
 This project makes use of [Dancrumb's](https://github.com/dancrumb) [hpack repo](https://github.com/dancrumb/hpack).
