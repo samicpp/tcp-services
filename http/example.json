@@ -1,0 +1,10 @@
+[
+    {
+        "default":{ "dir": "./default/" },
+        "https://example.com/test":{ "dir": "./example-test/" },
+        "https://search.example.com":{
+            "dir": "./search/",
+            "router": "search.deno.ts"
+        }
+    }
+]

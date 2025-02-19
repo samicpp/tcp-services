@@ -1243,7 +1243,7 @@ class Engine extends StandardMethods{
     get hpackTableSize(){return this.#hpackTableSize};
     set hpackTableSize(s:number){if(s>=0)this.#hpackTableSize=parseInt(s.toString())};
     async#hpackDecode(buff:Uint8Array,method=0):Promise<string[][]>{
-      //console.log(buff,method);
+      if(libOpt.debug)console.log(buff,method);
       if(method==0){
         //hpack
         return new HPACK().decode(buff);
