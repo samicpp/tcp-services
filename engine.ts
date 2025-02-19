@@ -5,7 +5,7 @@ import { encode as base64Encode } from "https://deno.land/std@0.97.0/encoding/ba
 import { createHash } from "https://deno.land/std@0.97.0/hash/mod.ts";
 import * as streams from "https://deno.land/std@0.153.0/streams/mod.ts";
 import HPACK from "npm:hpack";
-import * as dancrumb_hpack from "./dancrumb-hpack/mod.ts";
+import * as hpackd from "./dancrumb-hpack/mod.ts";
 import hpackjs from "npm:hpack.js";
 
 const {readableStreamFromIterable}=streams;
@@ -890,7 +890,7 @@ class Engine extends StandardMethods{
     #ownSettings:Record<string|number,number>={initial_window_size:1048576,max_header_list_size:16384};
     async sendSettings():Promise<void>{
       try{
-        const settFrame=this.#frame(0,"settings",{flags:[],settings:this.ownSettings});
+        const settFrame=await this.#frame(0,"settings",{flags:[],settings:this.ownSettings});
         await this.#tcp.write(settFrame.buffer);
         //return true;
       }catch(err) {
@@ -914,7 +914,8 @@ class Engine extends StandardMethods{
         const setting=this.#setting;
         const flow:Record<number,number>=this.#flow;
 
-        const fframes:Http2Frame[]=[...this.#packet(first)];
+        const fframes:Http2Frame[]=[];
+        for await(let f of this.#packet(first))fframes.push(f);
         const headers:Record<number,Record<string,string>>={};
         const bodies:Record<number,number[]>={};
         //const pack=await this.#read();
@@ -946,7 +947,7 @@ class Engine extends StandardMethods{
                   else for(let si in fr.settings.int)settings[fr.streamId][si]=fr.settings.int[si];
                 };
                 if(fr.settings.int[4])flow[fr.streamId]=fr.settings.int[4];
-                await this.#tcp.write(this.#frame(fr.streamId,4,{flags:["ack"]})).catch(e=>e);
+                await this.#tcp.write(await this.#frame(fr.streamId,4,{flags:["ack"]})).catch(e=>e);
               }else if(fr.raw.type==8){
                 let wu=fr.buffer;
                 //if(!flow[fr.streamId])flow[fr.streamId]=flow[0];
@@ -967,7 +968,7 @@ class Engine extends StandardMethods{
                   this.#respond(fr.streamId,headers,bodies);
                 }
               }else if(fr.raw.type==7){
-                await this.#tcp.write(this.#frame(fr.streamId,7,{flags:["ack"]})).catch(e=>e);
+                await this.#tcp.write(await this.#frame(fr.streamId,7,{flags:["ack"]})).catch(e=>e);
                 this.emit("close",fr);
                 this.#tcp.close();
               }else if(fr.raw.type==3){
@@ -995,7 +996,9 @@ class Engine extends StandardMethods{
 
             // loop back
             const pack=await this.#read().catch(e=>new Uint8Array);
-            frames=[...this.#packet(pack)];
+            frames.length=0;
+            for await(let f of this.#packet(pack))frames.push(f);
+            //frames=[...this.#packet(pack)];
             if(pack.length==0){
               this.emit("close",this);
               break;
@@ -1010,7 +1013,7 @@ class Engine extends StandardMethods{
     };
     async#respond(sid,headers,bodies){
       //console.log(sid,headers,bodies);
-      const hand=this.#handler(sid,headers[sid],bodies[sid]);
+      const hand=await this.#handler(sid,headers[sid],bodies[sid]);
       headers[sid]={};
       bodies[sid]=[];
       //console.log("new stream handler",hand);
@@ -1019,7 +1022,7 @@ class Engine extends StandardMethods{
     #flowInit(sid:number){
       this.#flow[sid]=this.#setting[4];
     }
-    #handler(sid,headers,body):Http2Stream{
+    async#handler(sid,headers,body):Http2Stream{
       const frame=(...a)=>this.#frame(...a);
       const flowInit=(sid:number)=>this.#flowInit(sid);
       const setting=this.#setting;
@@ -1060,14 +1063,14 @@ class Engine extends StandardMethods{
         removeHeader(name:string):boolean{return delete this.#headers[name.toLowerCase()]};
         get headers():Record<string,string>{return {...this.#headers,...this.#sysHeaders}};
         async reset():Promise<boolean>{
-          let suc=await tcp.write(frame(sid,3,{data:"\x00\x00\x00\x00"}).buffer)//.then(r=>r?this.#closed=true:false)
+          let suc=await tcp.write(await frame(sid,3,{data:"\x00\x00\x00\x00"}).then(f=>f.buffer))//.then(r=>r?this.#closed=true:false)
           if(suc){
             this.#closed=true;
             usedSids.splice(usedSids.indexOf(sid),1);
             return true;
           } else return false
         };
-        #write(buff:ArrayBuffer):Promise<boolean>{return tcp.write(buff).then(r=>true).catch(e=>false);};
+        #write(buff:ArrayBufferLike|Uint8Array|ArrayBuffer):Promise<boolean>{return tcp.write(buff).then(r=>true).catch(e=>false);};
         #getHeadBuff(end:boolean){
           this.#sysHeaders.date=new Date().toGMTString();
           this.#sysHeaders.vary="Accept-Encoding";
@@ -1078,7 +1081,7 @@ class Engine extends StandardMethods{
         }
         async#sendHead(end?:boolean){
           if(!this.#sentHead){
-            const head=this.#getHeadBuff(!!end);
+            const head=await this.#getHeadBuff(!!end);
             this.#sentHead=true;
             return await this.#write(head.buffer);
           } else return false;
@@ -1100,7 +1103,7 @@ class Engine extends StandardMethods{
           if(this.#closed)return false;
           await this.#sendHead();
           if(!this.#flowSize(data.length))throw new Error("window size too small");
-          const dataFrame=frame(sid,"data",{data});
+          const dataFrame=await frame(sid,"data",{data});
           this.#flowPass(data.length);
           return await this.#write(dataFrame.buffer);
         };
@@ -1113,11 +1116,11 @@ class Engine extends StandardMethods{
           //else await this.#sendHead();
           else if(!this.#sentHead){
             this.#sysHeaders["content-length"]=data.length.toString();
-            const h=this.#getHeadBuff(false).buffer;
-            const dat=frame(sid,"data",{flags:["end_stream"],data}).buffer;
+            const h=await this.#getHeadBuff(false).then(f=>f.buffer);
+            const dat=await frame(sid,"data",{flags:["end_stream"],data}).then(f=>f.buffer);
             return await this.#write(new Uint8Array([...h,...dat]));
           }else{
-            const dat=frame(sid,"data",{flags:["end_stream"],data});
+            const dat=await frame(sid,"data",{flags:["end_stream"],data});
             return await this.#write(dat.buffer);
           }
         };
@@ -1138,9 +1141,9 @@ class Engine extends StandardMethods{
           flowInit(nsid);
           if(!this.#flowSize(data.length,nsid))throw new Error("window size too small");
           //let sidb=(nsid.toString(16).padStart(8,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16));
-          let pf=frame(sid,5,{targetStreamId:nsid,headers:req}).buffer;
-          let hf=frame(nsid,1,{flags:["end_headers"],headers}).buffer;
-          let df=frame(nsid,0,{flags:["end_stream"],data}).buffer;
+          let pf=await frame(sid,5,{targetStreamId:nsid,headers:req}).then(f=>f.buffer);
+          let hf=await frame(nsid,1,{flags:["end_headers"],headers}).then(f=>f.buffer);
+          let df=await frame(nsid,0,{flags:["end_stream"],data}).then(f=>f.buffer);
           //if(flow[0]-data.length>0)df=frame(nsid,0,{flags:["end_stream"],data}).buffer;
           //else throw new Error("window size too small");
           let jf=new Uint8Array([...pf,...hf,...df]);
@@ -1204,14 +1207,43 @@ class Engine extends StandardMethods{
 
     
     get#hpack(){return new HPACK};
-    /*#hpackContext={
-      encode:new dancrumb_hpack.EncodingContext(),
-      decode:new dancrumb_hpack.DecodingContext(),
-    };*/
-    #hpackTableSize=4096;
+    
+    async#danEncode(h:string[][]){
+      /*let hs:string="";
+      if(typeof h=="string")hs=h;
+      else if(typeof h=="object")hs=h.join("\n").replaceAll(",",": ");
+      else hs=String(h);*/
+      let hs:string=h.join("\n").replaceAll(",",": ");
+
+      const estr=new hpackd.HPackEncoderStream(this.#hpackdContext.encode); 
+
+      const b:number[]=[];
+      const enc=await readableStreamFromIterable(hs).pipeThrough(estr);
+      for await (let l of enc)b.push(...l);
+      return b;
+    }
+    async#danDecode(hbuff:number[]){
+      const dstr=new hpackd.HPackDecoderStream(this.#hpackdContext.decode);
+      const dec=await readableStreamFromIterable([hbuff]).pipeThrough(dstr);
+      const te:string[][]=[];
+      try{
+        for await (let e of dec){
+          let s=e.split(": ");
+          te.push([s[0],s[1]]);
+        };
+      }catch(err){this.emit("error",err)}
+      return te;
+    }
+    #hpackdContext={
+      encode:new hpackd.EncodingContext(),
+      decode:new hpackd.DecodingContext(),
+    };
+
+    #hpackTableSize=4*1024**2; //4kb
     get hpackTableSize(){return this.#hpackTableSize};
     set hpackTableSize(s:number){if(s>=0)this.#hpackTableSize=parseInt(s.toString())};
-    #hpackDecode(buff:Uint8Array,method=0):string[][]{
+    async#hpackDecode(buff:Uint8Array,method=0):Promise<string[][]>{
+      //console.log(buff,method);
       if(method==0){
         //hpack
         return new HPACK().decode(buff);
@@ -1228,12 +1260,13 @@ class Engine extends StandardMethods{
         return entr;
       } else if(method==2){
         // dancrumb
-        return[];
+        const entr=await this.#danDecode([...buff]);
+        return entr;
       } else {
         return[];
       }
     };
-    #hpackEncode(entr:string[][],method=0):Uint8Array{
+    async#hpackEncode(entr:string[][],method=0):Promise<Uint8Array>{
       if(method==0){
         // hpack
         return new HPACK().encode(entr);
@@ -1246,23 +1279,24 @@ class Engine extends StandardMethods{
         return com.read();
       }else if(method==2){
         // dancrumb
-        return new Uint8Array;
+        const b=await this.#danEncode(entr);
+        return new Uint8Array(b);
       }else{
         return new Uint8Array;
       }
     };
-    hpackDecode(buff:Uint8Array,...methods:number[]):string[][]{
+    async hpackDecode(buff:Uint8Array,...methods:number[]):Promise<string[][]>{
       let res:string[][]=[],lerr=null,s=false;
       for(let i=0;i<methods.length;i++){
-        try{res.push(...this.#hpackDecode(buff,methods[i]));s=true;break}catch(err){this.emit("error",err);lerr=err};
+        try{res.push(...await this.#hpackDecode(buff,methods[i]));s=true;break}catch(err){this.emit("error",err);lerr=err};
       };
       //if(!s)throw new Error("couldn't decode hpack");
       return res;
     };
-    hpackEncode(entr:string[][],method=0,tries=3):Uint8Array{
+    async hpackEncode(entr:string[][],method=0,tries=3):Promise<Uint8Array>{
       let res:Uint8Array=new Uint8Array,lerr=null,s=false;
       for(let i=0;i<tries;i++){
-        try{res=this.#hpackEncode(entr,method);s=true;break}catch(err){this.emit("error",err);lerr=err};
+        try{res=await this.#hpackEncode(entr,method);s=true;break}catch(err){this.emit("error",err);lerr=err};
       };
       if(!s)throw new Error("couldn't decode hpack");
       return res;
@@ -1334,7 +1368,7 @@ class Engine extends StandardMethods{
 
       return frameBuffer
     };
-    #frame(streamId:number,type:number|string,options?:{flags?:number|string[],data?:string|Uint8Array,headers?:Record<string,string>,settings?:Record<string|number,number>,error?:{code:number,lastStreamID?:number,message?:Uint8Array|string},targetStreamId?:number}){
+    async#frame(streamId:number,type:number|string,options?:{flags?:number|string[],data?:string|Uint8Array,headers?:Record<string,string>,settings?:Record<string|number,number>,error?:{code:number,lastStreamID?:number,message?:Uint8Array|string},targetStreamId?:number}){
       if(!options)options={};
 
       if(libOpt.debug)console.log("make frame",streamId,type,options);
@@ -1350,7 +1384,7 @@ class Engine extends StandardMethods{
       
       let flagByte=parseInt(flags.toString());
       let typeByte=parseInt(type.toString());
-      let heh:Uint8Array=this.hpackEncode(Object.entries(headers),1);
+      let heh:Uint8Array=await this.hpackEncode(Object.entries(headers),1);
       let settList:number[]=[];
       let settBuff:Uint8Array=new Uint8Array;
       let errBuff:Uint8Array=new Uint8Array;
@@ -1412,7 +1446,7 @@ class Engine extends StandardMethods{
       }
 
     };
-    *#packet(buff:Uint8Array){
+    async*#packet(buff:Uint8Array){
       try{
         // frame types cheat sheet
         const types=this.#frameTypes;
@@ -1423,7 +1457,7 @@ class Engine extends StandardMethods{
         //const dancrumb=(b:Uint8Array)=>this.#dancrumb(b);
         if(libOpt.debug)console.log("packet arg",buff);
 
-        function frame(buff){
+        async function frame(buff):Promise<Http2Frame|object>{
 
           if(buff.length<9)return[{},new Uint8Array()];
           const length=[...buff.subarray(0,3)];
@@ -1481,7 +1515,7 @@ class Engine extends StandardMethods{
           if(frame.raw.type==1&&frame.buffer.length>0){
             let entr:string[][]=[];
             try{
-              entr=th.hpackDecode(frame.buffer,0,0,1);
+              entr=await th.hpackDecode(frame.buffer,0,1,2);
             }catch(err){
               th.emit("error",err);
             };
@@ -1541,11 +1575,17 @@ class Engine extends StandardMethods{
           return [frame,remain];
         };
 
-        let last=frame(buff);
+        let last=await frame(buff);
         yield last[0];
         if(!last[1].length)return;
 
-        while((last=frame(last[1]))[1].length)yield last[0];
+        try{
+          while((last=await frame(last[1]))[1].length)yield last[0];
+        } catch(err){
+          this.emit("error",err);
+          //console.log(last);
+          //throw err;
+        }
         yield last[0];
       }catch(err){this.emit("error",err);};
     };
