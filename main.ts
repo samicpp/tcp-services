@@ -182,7 +182,7 @@ tcp.on("connect",async({socket,client}:HttpSocket)=>{
         }
     } else {
         http.listener(socket);
-        console.log("using http1.1");
+        logsole.log("using http1.1");
     };
 });
 tcp.on("http2",http.listener2);
