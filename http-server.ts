@@ -52,9 +52,9 @@ async function readf(get){
 const readfText=g=>readf(g).then(b=>td.decode(b));
 
 export async function listener2(socket: Http2Socket){
-  socket.on("error",console.error);
+  socket.on("error",(...a)=>logsole.error(...a));
   let suc=await socket.ready;
-  if(!suc)console.warn("http2 ready not successful",socket);
+  if(!suc)logsole.warn("http2 ready not successful",socket);
   console.log("http2",socket);
   //console.log("http2",socket);
   socket.on("stream",async function(stream:Http2Stream){
@@ -69,11 +69,11 @@ export async function listener2(socket: Http2Socket){
   })
 };
 export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
-    socket.on("error",console.error);
+    socket.on("error",(...a)=>logsole.error(...a));
     //console.log(socket.enabled);
     let proxied=false;
     let isValid=client.isValid;
-    console.log(client);
+    logsole.log(client);
     /*if(!client.isValid){
       socket.status=400;
       socket.statusMessage="Bad Request";

@@ -947,7 +947,7 @@ class Engine extends StandardMethods{
                   else for(let si in fr.settings.int)settings[fr.streamId][si]=fr.settings.int[si];
                 };
                 if(fr.settings.int[4])flow[fr.streamId]=fr.settings.int[4];
-                await this.#tcp.write(await this.#frame(fr.streamId,4,{flags:["ack"]})).catch(e=>e);
+                await this.#tcp.write((await this.#frame(fr.streamId,4,{flags:["ack"]})).buffer).catch(e=>e);
               }else if(fr.raw.type==8){
                 let wu=fr.buffer;
                 //if(!flow[fr.streamId])flow[fr.streamId]=flow[0];
@@ -968,12 +968,14 @@ class Engine extends StandardMethods{
                   this.#respond(fr.streamId,headers,bodies);
                 }
               }else if(fr.raw.type==7){
-                await this.#tcp.write(await this.#frame(fr.streamId,7,{flags:["ack"]})).catch(e=>e);
+                await this.#tcp.write((await this.#frame(fr.streamId,7,{flags:["ack"]})).buffer).catch(e=>e);
                 this.emit("close",fr);
                 this.#tcp.close();
               }else if(fr.raw.type==3){
                 flow[fr.streamId]=flow[0];
                 this.#usedSids.splice(this.#usedSids.indexOf(fr.streamId),1);
+              }else if(fr.raw.type==6){
+                await this.#tcp.write((await this.#frame(fr.streamId,6,{flags:["ack"],data:fr.buffer})).buffer).catch(e=>e);
               };
             };
 
@@ -1372,6 +1374,7 @@ class Engine extends StandardMethods{
       if(!options)options={};
 
       if(libOpt.debug)console.log("make frame",streamId,type,options);
+      console.log("resframe", type, streamId, options); // ::REMOVE
 
       let flags=options?.flags||0;
       let data=options?.data||new Uint8Array;
@@ -1570,6 +1573,8 @@ class Engine extends StandardMethods{
           else if(frame.raw.type==3){
             frame.error.code=parseInt(frame.raw.payload.map(v=>v.toString(16).padStart(2,"0")).join(''),16);
           };
+
+          console.log("frame", frame.type, frame.streamId, frame); // ::REMOVE
 
           let remain=buff.subarray(9+lenInt);
           return [frame,remain];
