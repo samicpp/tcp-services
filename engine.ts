@@ -1020,7 +1020,7 @@ class Engine extends StandardMethods{
       //console.log(sid,headers,bodies);
       let headEntr=await this.hpackDecode(headersBuff,0,1,2);
       const head=Object.fromEntries(headEntr);
-      const hand=await this.#handler(sid,head,bodies[sid]);
+      const hand=await this.#handler(sid,{...headers[sid],...head},bodies[sid]);
       headers[sid]={};
       bodies[sid]=[];
       //console.log("new stream handler",hand);
@@ -1379,7 +1379,7 @@ class Engine extends StandardMethods{
       if(!options)options={};
 
       if(libOpt.debug)console.log("make frame",streamId,type,options);
-      console.log("resframe", type, streamId, options); // ::REMOVE
+      //console.log("resframe", type, streamId, options); // ::REMOVE
 
       let flags=options?.flags||0;
       let data=options?.data||new Uint8Array;
@@ -1579,7 +1579,7 @@ class Engine extends StandardMethods{
             frame.error.code=parseInt(frame.raw.payload.map(v=>v.toString(16).padStart(2,"0")).join(''),16);
           };
 
-          console.log("frame", frame.type, frame.streamId, frame); // ::REMOVE
+          //console.log("frame", frame.type, frame.streamId, frame); // ::REMOVE
 
           let remain=buff.subarray(9+lenInt);
           return [frame,remain];
