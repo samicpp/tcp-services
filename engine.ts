@@ -917,6 +917,7 @@ class Engine extends StandardMethods{
         const fframes:Http2Frame[]=[];
         for await(let f of this.#packet(first))fframes.push(f);
         const headers:Record<number,Record<string,string>>={};
+        const headersBuff:Record<number,number[]>={};
         const bodies:Record<number,number[]>={};
         //const pack=await this.#read();
         //const frames=[...this.#packet(pack)];
@@ -954,18 +955,20 @@ class Engine extends StandardMethods{
                 let awu=[...wu];
                 this.#flow[fr.streamId]+=parseInt(awu.map(v=>("00"+v.toString(16)).substring(v.toString(16).length)).join(''),16);
               }else if(fr.raw.type==1){
+                if(!headersBuff[fr.streamId])headersBuff[fr.streamId]=[];
                 if(!headers[fr.streamId])headers[fr.streamId]={};
                 headers[fr.streamId]={...headers[fr.streamId],...fr.headers};
+                headersBuff[fr.streamId].push(...fr.raw.payload);
 
                 if(fr.flags.includes("end_stream")){
-                  this.#respond(fr.streamId,headers,bodies);
+                  this.#respond(fr.streamId,headers,bodies,headersBuff);
                 }
               }else if(fr.raw.type==0){
                 if(!bodies[fr.streamId])bodies[fr.streamId]=[];
                 bodies[fr.streamId].push(...fr.buffer);
 
                 if(fr.flags.includes("end_stream")){
-                  this.#respond(fr.streamId,headers,bodies);
+                  this.#respond(fr.streamId,headers,bodies,headersBuff);
                 }
               }else if(fr.raw.type==7){
                 await this.#tcp.write((await this.#frame(fr.streamId,7,{flags:["ack"]})).buffer).catch(e=>e);
@@ -1013,9 +1016,11 @@ class Engine extends StandardMethods{
         this.emit("error",err);
       };
     };
-    async#respond(sid,headers,bodies){
+    async#respond(sid,headers,bodies,headersBuff){
       //console.log(sid,headers,bodies);
-      const hand=await this.#handler(sid,headers[sid],bodies[sid]);
+      let headEntr=await this.hpackDecode(headersBuff,0,1,2);
+      const head=Object.fromEntries(headEntr);
+      const hand=await this.#handler(sid,head,bodies[sid]);
       headers[sid]={};
       bodies[sid]=[];
       //console.log("new stream handler",hand);
