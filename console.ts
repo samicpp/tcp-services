@@ -38,12 +38,12 @@ export class Logcat{
 //let consoleKeys=Object.keys(Object.getOwnPropertyDescriptors(console));
 export class LogcatConsole{
     #logcat:Logcat; allow:boolean=true;
-    #proxy; levels:string[]=["debug","debug2","log","log2","log3","warn","warn2","error","error2"];
+    #proxy; levels:string[]=["debug","debug2","info","log","log2","log3","warn","warn2","error","error2"];
     constructor(logcat:Logcat){
         this.#logcat=logcat;
         const th=this;
         this.#proxy=new Proxy(console,{get(o,p){
-            if(typeof o[p]!="function"||["Console"].includes(p.toString()))return o[p];
+            if((typeof o[p]!="function"||["Console"].includes(p.toString()))&&o[p]!=null)return o[p];
             return async function(...args){
                 try{
                     let s:string[]=[];

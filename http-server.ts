@@ -24,7 +24,7 @@ const imports={openAI,canvas,OpenAI,ollama,pdflib,pug,LogSetup:LS,logsole,logcat
 const caches:Record<string,{date:number,content:string|Uint8Array,headers:Record<string,string>,status:number,statusMessage:string}>={};
 const fcaches:Record<string,{date:number,buffer:Uint8Array}>={};
 const cacheTime:number=10_000;
-const dissallow:string[]=envget("dissallow",[]).split(";");
+const dissallow:string[]=envget("dissallow","").split(";");
 
 function cache(get:string,socket:HttpSocket|PseudoHttpSocket){
   let d=Date.now();
@@ -93,7 +93,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
       return await Deno.stat(get).catch(e=>null);
     };
 
-    logsole.warn("socket client isValid",socket.client.isValid);
+    logsole.info("socket client isValid",socket.client.isValid);
     let url:SpecialURL;
     class SpecialURL extends URL{
       config: {

@@ -16,7 +16,8 @@
                 "run",
                 "--unstable",
                 "--inspect-brk",
-                "--allow-all"
+                "--allow-all",
+                "--env-file",
             ],
             "attachSimplePort": 9229
         }

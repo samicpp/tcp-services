@@ -62,34 +62,38 @@ You can configure this server with cli parameters or with an .env file.
 
 #### Env file.
 The env file contains things like the tls cert paths.
-Heres [`example2.env`](/example2.env)
+You can find the most recent env files in [`example.env`](/example2.env) and [`example2.env`](/example2.env).
+This is taken from `example2.env` at Tuesday March 04 2025 13:45:21 GMT+0100 (Central-European standard time).
 ```env
 # main.ts
 envonly="1"
 
 dyn=""
 http="8080"
-https=""
+https="1443"
 
 silent="0"
 
-useTls="0"
-keyfile=""
-certfile=""
+useTls="1"
+keyfile="./localhost.key"
+certfile="./localhost.crt"
 cafile=""
-alpn=""
+alpn="h2;http/1.1"
 
 logcatfile="./logcat.log"
+loglevels="debug;debug2;info;log;log2;log3;warn;warn2;error;error2"
 
 # http-server.ts
-openai_key=""
+openai_key="api key"
 
 dissallow=".no;.not"
 ```
+This example might not be up-to-date.
 
 ##### Properties
 - `dissallow`: `http-server.ts` wont send a response if the file ends with any of those file extensions (seperated by `;`).
 - `logcatfile`: Stores console output in there.
+- `loglevels`: Contains a list of log levels (such as `error`, `log`, and `debug`) to output to stdout.
 - `envonly`: Makes `main.ts` ingore cli params.
 - `dyn` `http` `https`: Acts like the cli params `dyn` `http` `https`.
 - `silent`: Won't write logs to stdout.

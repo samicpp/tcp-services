@@ -231,8 +231,9 @@ setInterval(()=>{
     };
 })();// */
 //logsole.levels.splice(logsole.levels.indexOf("log"),1);
-//logsole.levels=["debug","debug2","log","log2","log3","warn","warn2","error","error2"];
+//logsole.levels=["debug","debug2","info","log","log2","log3","warn","warn2","error","error2"];
 //logsole.levels=["log","error","fatal"];
+logsole.levels=deno.env.get("loglevels")?.split(";")||logsole.levels;
 if(true){
     globalThis.logsole=logsole;
     globalThis.Engine=Engine;
