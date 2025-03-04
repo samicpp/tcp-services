@@ -7,11 +7,37 @@ import * as Logsole from './console.ts';
 const deno=Deno; // mitigate error messages in vscode
 
 let logcatPath=deno.env.get("logcatfile");
+const [logfile,logsole]=Logsole.default(logcatPath);
+await logfile.ready;
+
+const tc={
+    e:TextEncoder.prototype.encode.bind(new TextEncoder),
+    d:TextDecoder.prototype.decode.bind(new TextDecoder),
+};
 
 //Error.stackTraceLimit = 1000;
 
 setOpt("debug",false);
 setOpt("eventDbg",false);
+
+/**/await Deno.stat("./.env").then(f=>{
+    if(!f.isFile){
+        logsole.fatal(new Error(".env isn't a file"));
+        Deno.exit(2);
+    }
+}).catch(err=>{
+    logsole.error(err);
+    Deno.writeFile(
+        ".env",
+        tc.e('# main.ts\nenvonly="1"\n\ndyn=""\nhttp="8080"\nhttps=""\n\nsilent="0"\n\nuseTls="0"\nkeyfile=""\ncertfile=""\ncafile=""\nalpn=""\n\nlogcatfile="./logcat.log"\n\n# http-server.ts\nopenai_key=""\n\ndissallow=".no;.not"')
+    ).then(async r=>{
+        logsole.info("created env file",r);
+        await import("jsr:@std/dotenv/load");
+    }).catch(err=>{
+        logsole.fatal(err);
+        Deno.exit(1);
+    });
+});//*/
 
 let args:{
     opt:Record<string,string[]>;
@@ -38,13 +64,9 @@ for(let a of deno.args){
     else{args.lopt.push(a)}
 }
 
-const tc={
-    e:TextEncoder.prototype.encode.bind(new TextEncoder),
-    d:TextDecoder.prototype.decode.bind(new TextDecoder),
-};
 
-const [logfile,logsole]=Logsole.default(logcatPath);
-await logfile.ready;
+
+
 /*const logfile=new class Logcat{
     stream; writer; ready;
     constructor(){
@@ -176,7 +198,7 @@ tcp.on("connect",async({socket,client}:HttpSocket)=>{
             logsole.log("using http2");
             return;
         } else {
-            logsole.log("couldn't upgrade to http2");
+            logsole.warn("couldn't upgrade to http2");
             //socket.deny();
             return;
         }
@@ -188,13 +210,13 @@ tcp.on("connect",async({socket,client}:HttpSocket)=>{
 tcp.on("http2",http.listener2);
 tcp.upgrade=true;
 
-logsole.log('pid: ',deno.pid);
+logsole.info('pid: ',deno.pid);
 await deno.writeTextFile("last-pid.txt", deno.pid.toString());
 
 let lastBeat=Date.now();
 setInterval(()=>{
     let t=Date.now();
-    logsole.log("keep alive",t-lastBeat);
+    logsole.debug("keep alive",t-lastBeat);
     lastBeat=t;
 },1*60*60*1000);
 
@@ -208,7 +230,15 @@ setInterval(()=>{
         };
     };
 })();// */
-logsole.levels=["log","error","warn"];
+//logsole.levels.splice(logsole.levels.indexOf("log"),1);
+//logsole.levels=["debug","debug2","log","log2","log3","warn","warn2","error","error2"];
+//logsole.levels=["log","error","fatal"];
+if(true){
+    globalThis.logsole=logsole;
+    globalThis.Engine=Engine;
+    globalThis.engine=tcp;
+    globalThis.http=http;
+}
 
 
-logsole.log("main.ts finish",new Date());
+logsole.info("main.ts finish",new Date());

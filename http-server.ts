@@ -55,7 +55,7 @@ export async function listener2(socket: Http2Socket){
   socket.on("error",(...a)=>logsole.error(...a));
   let suc=await socket.ready;
   if(!suc)logsole.warn("http2 ready not successful",socket);
-  console.log("http2",socket);
+  logsole.debug("http2",socket);
   //console.log("http2",socket);
   socket.on("stream",async function(stream:Http2Stream){
     /*console.log(stream);
@@ -63,7 +63,7 @@ export async function listener2(socket: Http2Socket){
     //stream.status=200;
     stream.setHeader("content-type","text/plain");
     await stream.close("Hello, world!");*/
-    logsole.log(stream,stream.client);
+    logsole.debug(stream,stream.client);
     const ps=stream.pseudo();
     listener(ps);
   })
@@ -93,7 +93,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
       return await Deno.stat(get).catch(e=>null);
     };
 
-    logsole.log("socket client isValid",socket.client.isValid);
+    logsole.warn("socket client isValid",socket.client.isValid);
     let url:SpecialURL;
     class SpecialURL extends URL{
       config: {
@@ -129,9 +129,9 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
               if(host[0]!="^")sv='^'+host.replace(/[.*+?^${}()\|[\]\\:]/g, '\\$&');
               const r=new RegExp(sv);
               const m=url.match(r);
-              logsole.log(r);
+              logsole.debug(r);
               if(m){
-                logsole.log("match");
+                logsole.debug("match");
                 tar=json[0][host];
                 t.config={host,regex:r,conf:json[0][host],match:m};
                 //tar.hostReg=r;
@@ -151,7 +151,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
 
           if(rstat){
             t.router=utar.router;
-            logsole.log("router present",t.router);
+            logsole.debug("router present",t.router);
           };
         }().catch(e=>e);
       }
@@ -159,8 +159,8 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
     try{url=new SpecialURL(`${proxied?client.headers["x-scheme"]:(socket.type=="tcp::tls"?"https":"http")}://${(proxied?client.headers["x-forwarded-host"]:client.headers.host)||"unknown"}${client.path||"/"}`);}catch(err){logsole.error(err);isValid=false};
     if(!isValid||!url)url=new SpecialURL(`about:blank#invalid`);
     
-    logsole.log(url.toString());
-    logsole.log(client.address);
+    logsole.log2(url.toString());
+    logsole.log2(client.address);
 
     /*if(url.hostname=="unkown"&&client.httpVersion=="HTTP/2"){
       socket.deny();
@@ -169,7 +169,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
 
     async function e403(get:string,err:Error){
       let eget=url.getStart+"/errors/403.dyn.html";
-      logsole.log(err);
+      logsole.warn2(err);
       let stat=await exists(eget);
       socket.status=403;
       socket.statusMessage="Permission Denied";
@@ -181,9 +181,9 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
     }
     async function e404(get:string): Promise<void>{
       let eget=url.getStart+"/errors/404.dyn.html";
-      logsole.log("file doesnt exist");
+      logsole.warn("file doesnt exist");
       let stat=await exists(eget);
-      logsole.log(stat);
+      logsole.debug(stat);
       socket.status=404;
       socket.statusMessage="Not found";
       if(!stat){
@@ -219,7 +219,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
     };
     async function e500(get:string,err:Error){
       let eget=url.getStart+"/errors/500.dyn.html";
-      logsole.log(err);
+      logsole.warn2(err);
       let stat=await exists(eget);
       socket.status=500;
       socket.statusMessage="Internal Server Error";
@@ -233,7 +233,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
     //async function httpErr(status:){}
 
     async function directory(get:string): Promise<void>{
-      logsole.log("file is directory")
+      logsole.log2("file is directory")
         /*socket.status=400;
         socket.statusMessage="Conflict";
         await socket.writeText(get+" is directory\n");
@@ -244,8 +244,8 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
         if(getDirs[getDirs.length-1])lookfor.push(getDirs[getDirs.length-1]);
         let match={isFile:false,name:""};
 
-        logsole.log("lookfor",lookfor);
-        logsole.log("dirs",dirs);
+        logsole.debug("lookfor",lookfor);
+        logsole.debug("dirs",dirs);
 
         for await (const dir of Deno.readDir(get)) {
           dirs.push(dir);
@@ -257,11 +257,11 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
         };
 
         if(!match?.isFile){
-          logsole.log("cant find file",dirs);
+          logsole.warn("cant find file",dirs);
           return e409(get);
         } else {
           let nget=get+"/"+match.name;
-          logsole.log("found file",match.name);
+          logsole.log3("found file",match.name);
           return file(nget)
         }
     };
@@ -271,7 +271,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
 
         const bytes = await readf(get);
         let last=get.replace(/.*\//,"");
-        logsole.log("file found",bytes.byteLength);
+        logsole.debug("file found",bytes.byteLength);
         let ext=last.split(".");
         let lext=ext[ext.length-1];
         let dct=mime[""+lext];
@@ -292,9 +292,9 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
         }
 
         if(stop){
-          logsole.log("stop is true");
+          logsole.info("stop is true");
         }else if(last.endsWith(".deno.ts")){
-          logsole.log("importing deno thing",get);
+          logsole.debug("importing deno thing",get);
           dynamic=true;
           if(dyn[get]?.state&&dyn[get].state?.active){
             new Promise(r=>r(dyn[get].mod.default(socket,url,get,opt))).catch(e=>logsole.error(e));
@@ -307,30 +307,30 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
           };
           //if(dyn[get].state?.allowCaching)
         }else if(last.endsWith(".async.js")){
-          logsole.log("executing js code");
+          logsole.debug("executing js code");
           dynamic=true;
           let t=td.decode(bytes);
           let f=AsyncFunction("socket,url,get,opt,deno,imports,console",t);
           await f(socket,url,get,opt,Deno,imports,logsole);//.catch(err=>logsole.error(err));
         }else if(last.endsWith(".pug")){
-          logsole.log("compiling pug file")
+          logsole.debug("compiling pug file")
           let t=td.decode(bytes);
           if(isJss){
-            logsole.log("also executing as js multiline string");
+            logsole.debug("also executing as js multiline string");
             t=await jss(t,opt);
           };
           let h=pug.compile(t);
           socket.setHeader("Content-Type","text/html");
           await socket.close(h);
         }else if(isJss&&dct){
-          logsole.log("parsing as js multiline string");
+          logsole.debug("parsing as js multiline string");
           let t=td.decode(bytes);
           let r=await jss(t,opt);
           socket.setHeader("Content-Type",dct);
           await socket.close(r);
           //caches[get]={date:Date.now(),content:r,headers:socket.headers()};
         }else if(last.endsWith(".proxy.json")){
-          logsole.log("proxying the connection");
+          logsole.debug("proxying the connection");
           let json=JSON.parse(td.decode(bytes));
           let headers;
           let method;
@@ -344,7 +344,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
             method=json.request.method||{};
             body=json.request.body||'';
           };
-          logsole.log("proxying to "+json.url);
+          logsole.log2("proxying to "+json.url);
           let res=await fetch(json.url,{method,headers,body:(method=="GET"||method=="HEAD"?undefined:body)});
           let text=await res.clone().text();
           if(json.response.proxied){
@@ -371,13 +371,13 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
           await socket.close(rtext);
           //caches[get]={date:Date.now(),content:rtext,headers:socket.headers()};
         }else if(last.endsWith(".link")){
-          logsole.log("following link to",td.decode(bytes));
+          logsole.debug("following link to",td.decode(bytes));
           await handler(td.decode(bytes));
         }else if(last.endsWith(".ai.json")){
-          logsole.log("using ai for content");
+          logsole.debug("using ai for content");
           let ai=aid[get];
           const json=JSON.parse(td.decode(bytes));
-          logsole.log("ai exist",!!ai);
+          logsole.debug("ai exist",!!ai);
           if(!ai||ai.done){
             ai=aid[get]={};
             if(json.type=="openai"){
@@ -410,7 +410,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
               //ai=aid[get]={res:chat,json,done:false,content:chat.message.content};
             };
           };
-          logsole.log("ai",ai);
+          logsole.debug("ai",ai);
           if(!ai.ready)await ai.pro;
           if(ai&&!ai.res.stack){
             for(let [k,v] of Object.entries(json.headers))socket.setHeader(k,v);
@@ -428,7 +428,7 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
               }
             }
             ai.json.cycle--;
-            logsole.log("ai done",ai.json.cycle<0,ai.done);
+            logsole.info("ai done",ai.json.cycle<0,ai.done);
             if(ai.json.cycle<0)ai.done=true;
             await socket.close(c);
           } else{
@@ -438,18 +438,19 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
           };
           //caches[get]={date:Date.now(),content:rc,headers:socket.headers()};
         }else if(dct){
-          logsole.log("using as static file");
+          logsole.info("using as static file");
           socket.setHeader("Content-Type",dct);
           await socket.close(bytes);
           //caches[get]={date:Date.now(),content:bytes,headers:socket.headers()};
         }else{
-          logsole.log("idk what this is. sending as html file",last);
+          logsole.info("unknown. sending as html file",last);
           await socket.close(bytes);
         };
 
         if(!dynamic){
-          logsole.log(socket.written().length);
-          caches[get]={date:Date.now(),content:socket.written(),headers:socket.headers(),status:socket.status,statusMessage:socket.statusMessage};
+          let written=socket.written();
+          logsole.debug("wrote",written.length);
+          caches[get]={date:Date.now(),content:written,headers:socket.headers(),status:socket.status,statusMessage:socket.statusMessage};
         };
         //await socket.writeBuffer(bytes);
         //socket.close();
@@ -473,9 +474,10 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
         return null;
       } catch(err){
         try{
+          logsole.fatal(err);
           await e500(get,err);
-        } catch (err){
-          logsole.error(err);
+        } catch (err2){
+          logsole.fatal(err2);
           return err;
         }
       }
@@ -491,9 +493,9 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
       let get=`./${url.defdir}/${url.tardir}/${(url.pathname.replace(epath[0],"")).replaceAll(/\.+/g, ".").replaceAll(/\.\//g, "/").replace(/\/$/, "")}`;
       get=get.replaceAll(/\/+/g,"/").replace(/\/+$/,"");
       let rget=`./${url.defdir}/${url.tardir}/${url.router}`;
-      logsole.log("get",get);
-      logsole.log("rget",rget);
-      logsole.log("extra path",epath,url.config.match);
+      logsole.debug("get",get);
+      logsole.debug("rget",rget);
+      logsole.debug("extra path",epath,url.config.match);
       
       if(url.router)await handler(rget,{handler,file,directory,get,e400,e403,e404,e409,e500});
       else await handler(get);

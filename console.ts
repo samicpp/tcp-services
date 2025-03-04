@@ -38,7 +38,7 @@ export class Logcat{
 //let consoleKeys=Object.keys(Object.getOwnPropertyDescriptors(console));
 export class LogcatConsole{
     #logcat:Logcat; allow:boolean=true;
-    #proxy; levels:string[]=["log","warn","error"];
+    #proxy; levels:string[]=["debug","debug2","log","log2","log3","warn","warn2","error","error2"];
     constructor(logcat:Logcat){
         this.#logcat=logcat;
         const th=this;
@@ -58,7 +58,21 @@ export class LogcatConsole{
                 }
         
                 try{
-                    if(th.allow&&th.levels.includes(p.toString()))console[p](...args);
+                    let sp=p.toString();
+                    if(th.allow&&th.levels.includes(sp)){
+                        if(console[p])console[p](...args);
+                        else if(sp.startsWith("warn")){
+                            console.warn(...args);
+                        }else if(sp.startsWith("debug")){
+                            console.debug(...args);
+                        }else if(sp.startsWith("error")){
+                            console.error(...args);
+                        }else if(p=="fatal"){
+                            console.error("Uncaught ",...args);
+                        }else{
+                            console.log(...args);
+                        };
+                    }
                 }catch(err){
                     console.error("console invokation failed because",err);
                 }
@@ -66,9 +80,17 @@ export class LogcatConsole{
         }});
     }
 
+
     get log(){return this.#proxy.log}
+    get log2(){return this.#proxy.log2}
+    get log3(){return this.#proxy.log3}
+    get info(){return this.#proxy.info}
     get warn(){return this.#proxy.warn}
+    get warn2(){return this.#proxy.warn2}
+    get debug(){return this.#proxy.debug}
     get error(){return this.#proxy.error}
+    get fatal(){return this.#proxy.fatal}
+    get error2(){return this.#proxy.error2}
 }
 
 let logcat:Logcat;
