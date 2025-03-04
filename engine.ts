@@ -1295,17 +1295,17 @@ class Engine extends StandardMethods{
     async hpackDecode(buff:Uint8Array,...methods:number[]):Promise<string[][]>{
       let res:string[][]=[],lerr=null,s=false;
       for(let i=0;i<methods.length;i++){
-        try{res.push(...await this.#hpackDecode(buff,methods[i]));s=true;break}catch(err){this.emit("error",err);lerr=err};
+        try{res.push(...await this.#hpackDecode(buff,methods[i]));s=true}catch(err){this.emit("error",err);lerr=err};
       };
       //if(!s)throw new Error("couldn't decode hpack");
       return res;
     };
     async hpackEncode(entr:string[][],method=0,tries=3):Promise<Uint8Array>{
-      let res:Uint8Array=new Uint8Array,lerr=null,s=false;
+      let res:Uint8Array=new Uint8Array,lerr:Error|null=null,s=false;
       for(let i=0;i<tries;i++){
-        try{res=await this.#hpackEncode(entr,method);s=true;break}catch(err){this.emit("error",err);lerr=err};
+        try{res=await this.#hpackEncode(entr,method);s=true}catch(err){this.emit("error",err);lerr=err};
       };
-      if(!s)throw new Error("couldn't decode hpack");
+      if(!s)throw new Error("couldn't encode hpack "+lerr?.stack);
       return res;
     };
     #frameTypes={
