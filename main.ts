@@ -208,5 +208,7 @@ setInterval(()=>{
         };
     };
 })();// */
+logsole.levels=["log","error","warn"];
+
 
 logsole.log("main.ts finish",new Date());

@@ -594,6 +594,11 @@ interface Http2Stream extends StandardMethods{
     readonly sizeLeft:number;
 
     /**
+     * Contains information about the client
+     */
+    readonly client:Client2;
+
+    /**
      * Sends a data frame to the client and sends the headers.
      */
     write(data:string|Uint8Array):Promise<boolean>;

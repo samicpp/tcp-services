@@ -63,7 +63,7 @@ export async function listener2(socket: Http2Socket){
     //stream.status=200;
     stream.setHeader("content-type","text/plain");
     await stream.close("Hello, world!");*/
-    logsole.log(stream);
+    logsole.log(stream,stream.client);
     const ps=stream.pseudo();
     listener(ps);
   })

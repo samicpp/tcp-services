@@ -37,8 +37,8 @@ export class Logcat{
 
 //let consoleKeys=Object.keys(Object.getOwnPropertyDescriptors(console));
 export class LogcatConsole{
-    #logcat:Logcat; allow:boolean;
-    #proxy;
+    #logcat:Logcat; allow:boolean=true;
+    #proxy; levels:string[]=["log","warn","error"];
     constructor(logcat:Logcat){
         this.#logcat=logcat;
         const th=this;
@@ -58,7 +58,7 @@ export class LogcatConsole{
                 }
         
                 try{
-                    if(th.allow)console[p](...args);
+                    if(th.allow&&th.levels.includes(p.toString()))console[p](...args);
                 }catch(err){
                     console.error("console invokation failed because",err);
                 }
