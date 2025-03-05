@@ -1,5 +1,5 @@
 # Tcp Services
-Thist project consists of 2 parts: [A library (`engine.ts`)](#enginets) and [a handler](#http-serverts) (`http-server.ts` and `main.ts`)
+This project consists of 2 parts: [A library (`engine.ts`)](#enginets) and [a handler](#http-serverts) (`http-server.ts` and `main.ts`)
 
 ## HTTP
 - [`engine.ts`](#enginets): HTTP connection handling. [File](/engine.ts).
@@ -63,7 +63,7 @@ You can configure this server with cli parameters or with an .env file.
 #### Env file.
 The env file contains things like the tls cert paths.
 You can find the most recent env files in [`example.env`](/example2.env) and [`example2.env`](/example2.env).
-This is taken from `example2.env` at Tuesday March 04 2025 13:45:21 GMT+0100 (Central-European standard time).
+This is taken from `example.env` at Tuesday March 04 2025 13:45:21 GMT+0100 (Central-European standard time).
 ```env
 # main.ts
 envonly="1"

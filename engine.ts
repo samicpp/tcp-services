@@ -1045,7 +1045,7 @@ class Engine extends StandardMethods{
       const type=this.#type;
 
       const hand=new class StreamHandler extends StandardMethods{
-        #client={body,headers,remoteAddr};
+        #client={body:new Uint8Array(body),headers,remoteAddr};
         #closed=false;
 
         get client():Client2{return this.#client};
