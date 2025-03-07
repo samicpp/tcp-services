@@ -1,6 +1,7 @@
-import * as compress from "jsr:@deno-library/compress";
 import "./docs.d.ts";
 import "./lib.deno.d.ts";
+import { ByteLib } from "./buffer.ts";
+import * as compress from "jsr:@deno-library/compress";
 import { encode as base64Encode } from "https://deno.land/std@0.97.0/encoding/base64.ts";
 import { createHash } from "https://deno.land/std@0.97.0/hash/mod.ts";
 import * as streams from "https://deno.land/std@0.153.0/streams/mod.ts";
@@ -26,6 +27,7 @@ interface SecureID{
 };
 
 const TypedArray=Object.getPrototypeOf(Uint8Array.prototype).constructor;
+const bytelib=new ByteLib;
 
 class StandardMethods{
   #on = {};
@@ -47,6 +49,7 @@ class StandardMethods{
     else this.#que[eventName].push(obj);
   }
 };
+
 
 class Engine extends StandardMethods{
   #Deno = Deno;
