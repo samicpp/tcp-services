@@ -1,5 +1,5 @@
 import "./lib.deno.d.ts";
-import { StandardMethods } from "./std-methods.ts";
+import { Eventable as StandardMethods } from "./standard.ts";
 import { libOpt } from "./debug.ts";
 import { ByteLib } from "./buffer.ts";
 
@@ -11,13 +11,13 @@ import HPACK from "npm:hpack";
 import * as hpackd from "./dancrumb-hpack/mod.ts";
 import hpackjs from "npm:hpack.js";
 
-const {readableStreamFromIterable}=streams;
+const { readableStreamFromIterable } = streams;
 const bytelib = new ByteLib;
 
 export class Http2Socket extends StandardMethods {
-    #engine; #tcp; #ra;
-    #td: TextDecoder; #te: TextEncoder; #data; #type;
-    #socket; #ready; #client1;
+    #engine: Engine; #tcp: Deno.TcpConn; #ra: Deno.NetAddr;
+    #td: TextDecoder; #te: TextEncoder; #data: Uint8Array; #type: string;
+    #socket: HttpSocket|null; #ready: Promise<boolean>; #client1: Client|void;
 
     #readSize = 1024 * 10;
     set readSize(int: any) {
@@ -25,10 +25,10 @@ export class Http2Socket extends StandardMethods {
     };
     get readSize(): number { return this.#readSize };
 
-    get type() { return this.#type };
+    get type(): string { return this.#type };
 
 
-    constructor(engine, td, te, tcp, data, socket, type, remoteAddr) {
+    constructor(engine: any, td: TextDecoder, te: TextEncoder, tcp: Deno.TcpConn, data: Uint8Array, socket: HttpSocket|null, type: string, remoteAddr: Deno.NetAddr) {
         super();
 
         this.#td = td;
@@ -51,7 +51,7 @@ export class Http2Socket extends StandardMethods {
     get ready(): Promise<boolean> { return this.#ready };
 
     #buffer = new Uint8Array(0);
-    async#read(): Promise<Uint8Array> { return new Uint8Array([...this.#buffer.subarray(0, await this.#tcp.read(this.#buffer))]); };
+    async#read(): Promise<Uint8Array> { return new Uint8Array([...this.#buffer.subarray(0, (await this.#tcp.read(this.#buffer)) || 0)]); };
     updateSize(size?: number): void { this.#buffer = new Uint8Array(this.#readSize = size || this.#readSize); };
     //async init(){} // not applicable
     #magic = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
@@ -128,7 +128,7 @@ export class Http2Socket extends StandardMethods {
             for await (let f of this.#packet(first)) fframes.push(f);
             const headers: Record<number, Record<string, string>> = {};
             const headersBuff: Record<number, number[]> = {};
-            const bodies: Record<number, number[]> = {};
+            const bodies: Record<number, number[]|Uint8Array> = {};
             //const pack=await this.#read();
             //const frames=[...this.#packet(pack)];
             /*for(let f of fframes){
@@ -147,6 +147,7 @@ export class Http2Socket extends StandardMethods {
             while (true) {
                 try {
                     for (const fr of frames) {
+                        console.log(fr.type, fr); // :REMOVE:
                         if (libOpt.debug) console.log(fr.type, fr);
                         if (!this.#usedSids.includes(fr.streamId)) this.#usedSids.push(fr.streamId);
                         if (fr.streamId != 0 && !flow[fr.streamId]) this.#flowInit(fr.streamId);//flow[fr.streamId]=setting[4];
@@ -158,7 +159,10 @@ export class Http2Socket extends StandardMethods {
                                 else for (let si in fr.settings.int) settings[fr.streamId][si] = fr.settings.int[si];
                             };
                             if (fr.settings.int[4]) flow[fr.streamId] = fr.settings.int[4];
-                            await this.#tcp.write((await this.#frame(fr.streamId, 4, { flags: ["ack"] })).buffer).catch(e => e);
+                            const nf=await this.#frame(fr.streamId, 4, { flags: ["ack"] });
+                            //console.log("setting acknowledgement",nf); // :REMOVE:
+                            let r=await this.#tcp.write(nf.buffer).catch(e => e);
+                            //console.log("write result",r); // :REMOVE:
                         } else if (fr.raw.type == 8) {
                             let wu = fr.buffer;
                             //if(!flow[fr.streamId])flow[fr.streamId]=flow[0];
@@ -192,7 +196,7 @@ export class Http2Socket extends StandardMethods {
                         };
                     };
 
-                    if (!usedSocket && this.#socket) {
+                    if (!usedSocket && this.#socket && this.#client1) {
                         // means http2 upgrade took place
                         const socket: HttpSocket = this.#socket;
                         const client: Client = this.#client1;
@@ -203,7 +207,7 @@ export class Http2Socket extends StandardMethods {
                         headers[1][":scheme"] = this.type == "tcp::tls" ? "https" : "http";
                         for (let [k, v] of Object.entries(client.headers)) headers[1][k] = v;
                         bodies[1] = this.#te.encode(client.data);
-                        this.#respond(1, headers, bodies);
+                        this.#respond(1, headers, bodies, headersBuff);
                         usedSocket = true;
                     }
                     // handle streams 
@@ -239,8 +243,8 @@ export class Http2Socket extends StandardMethods {
     #flowInit(sid: number) {
         this.#flow[sid] = this.#setting[4];
     }
-    async#handler(sid, headers, body): Http2Stream {
-        const frame = (...a) => this.#frame(...a);
+    async#handler(sid, headers, body): Promise<Http2Stream> {
+        const frame = (sid,type,opt) => this.#frame(sid,type,opt);
         const flowInit = (sid: number) => this.#flowInit(sid);
         const setting = this.#setting;
         const settings = this.#settings;
@@ -254,171 +258,7 @@ export class Http2Socket extends StandardMethods {
         const usedSids = this.#usedSids;
         const type = this.#type;
 
-        const hand = new class StreamHandler extends StandardMethods {
-            #client = { body: new Uint8Array(body), headers, remoteAddr };
-            #closed = false;
-
-            get client(): Client2 { return this.#client };
-            get closed(): boolean { return this.#closed };
-
-            get type(): string { return type };
-
-            get compress(): boolean { return false };
-            #compress(t, b): Uint8Array | void {
-                if (t == "gzip") return compress.gzip(b);
-            };
-
-            #headers: Record<string, string> = {};
-            #sysHeaders: Record<string, string> = { ":status": "200" };
-            #sentHead = false;
-            get status(): number { return parseInt(this.#sysHeaders[":status"]) };
-            set status(status: number) { this.#sysHeaders[":status"] = status.toString() };
-            setHeader(name: string, value: string): void {
-                let no = ["connection"], nam = name.toString().toLowerCase();
-                if (!no.includes(nam)) this.#headers[nam] = value.toString();
-            };
-            removeHeader(name: string): boolean { return delete this.#headers[name.toLowerCase()] };
-            get headers(): Record<string, string> { return { ...this.#headers, ...this.#sysHeaders } };
-            async reset(): Promise<boolean> {
-                let suc = await tcp.write(await frame(sid, 3, { data: "\x00\x00\x00\x00" }).then(f => f.buffer))//.then(r=>r?this.#closed=true:false)
-                if (suc) {
-                    this.#closed = true;
-                    usedSids.splice(usedSids.indexOf(sid), 1);
-                    return true;
-                } else return false
-            };
-            #write(buff: ArrayBufferLike | Uint8Array | ArrayBuffer): Promise<boolean> { return tcp.write(buff).then(r => true).catch(e => false); };
-            #getHeadBuff(end: boolean) {
-                this.#sysHeaders.date = new Date().toGMTString();
-                this.#sysHeaders.vary = "Accept-Encoding";
-                let head;
-                if (!end) head = frame(sid, 1, { headers: { ":status": this.#sysHeaders[":status"], ...this.#headers, ...this.#sysHeaders }, flags: ["end_headers"] });  // sys headers last to overule any simulated user headers such as `:status`
-                else head = frame(sid, 1, { headers: { ":status": this.#sysHeaders[":status"], ...this.#headers, ...this.#sysHeaders }, flags: ["end_headers", "end_stream"] });
-                return head;
-            }
-            async#sendHead(end?: boolean) {
-                if (!this.#sentHead) {
-                    const head = await this.#getHeadBuff(!!end);
-                    this.#sentHead = true;
-                    return await this.#write(head.buffer);
-                } else return false;
-            };
-
-            get sizeLeft() { return flow[sid] };
-            #flowSize(len: number, stid: number = sid): boolean {
-                if (!flow[stid]) flowInit(stid);
-                return flow[stid] - len > 0 && flow[0] - len > 0;
-            }
-            #flowPass(len: number, stid: number = 0): boolean {
-                if (this.#flowSize(len, stid)) {
-                    flow[stid] -= len; flow[0] -= len;
-                    return true;
-                } else return false;
-            }
-
-            async write(data: string | Uint8Array) {
-                if (this.#closed) return false;
-                await this.#sendHead();
-                if (!this.#flowSize(data.length)) throw new Error("window size too small");
-                const dataFrame = await frame(sid, "data", { data });
-                this.#flowPass(data.length);
-                return await this.#write(dataFrame.buffer);
-            };
-
-            async close(data?: string | Uint8Array) {
-                if (this.#closed) return false;
-                if (data && !this.#flowSize(data.length)) throw new Error("window size too small");
-                if (data) this.#flowPass(data.length);
-                if (!data) return await this.#sendHead(true);
-                //else await this.#sendHead();
-                else if (!this.#sentHead) {
-                    this.#sysHeaders["content-length"] = data.length.toString();
-                    const h = await this.#getHeadBuff(false).then(f => f.buffer);
-                    const dat = await frame(sid, "data", { flags: ["end_stream"], data }).then(f => f.buffer);
-                    return await this.#write(new Uint8Array([...h, ...dat]));
-                } else {
-                    const dat = await frame(sid, "data", { flags: ["end_stream"], data });
-                    return await this.#write(dat.buffer);
-                }
-            };
-
-            async push(req: Record<string, string>, headers: Record<string, string>, data: string | Uint8Array): Promise<boolean> {
-                if (!http2.pushEnabled) return false;
-                //if(flow[0]-data.length<0)throw new Error("window size too small");
-                let max = http2.mainIntSettings[3];
-                if (max > 300) max = 300;
-                let nsid: number = -1;
-                for (let i = 0, rsid = Math.round(Math.random() * max); i < 5; i++) {
-                    if (!usedSids.includes(rsid)) {
-                        nsid = rsid;
-                        break;
-                    }
-                };
-                if (nsid == -1) return false;
-                flowInit(nsid);
-                if (!this.#flowSize(data.length, nsid)) throw new Error("window size too small");
-                //let sidb=(nsid.toString(16).padStart(8,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16));
-                let pf = await frame(sid, 5, { targetStreamId: nsid, headers: req }).then(f => f.buffer);
-                let hf = await frame(nsid, 1, { flags: ["end_headers"], headers }).then(f => f.buffer);
-                let df = await frame(nsid, 0, { flags: ["end_stream"], data }).then(f => f.buffer);
-                //if(flow[0]-data.length>0)df=frame(nsid,0,{flags:["end_stream"],data}).buffer;
-                //else throw new Error("window size too small");
-                let jf = new Uint8Array([...pf, ...hf, ...df]);
-                let suc = await this.#write(jf);
-                return suc;
-            };
-
-            pseudo(): PseudoHttpSocket { // future
-                const th = this;
-                const oc = th.client;
-                const written: number[] = [];
-                const psock = new class PseudoHttpSocket extends StandardMethods {
-                    get socket(): PseudoHttpSocket { return this };
-                    get client(): PseudoClient {
-                        const client: PseudoClient = new class PseudoClient {
-                            isValid = true;
-                            err = undefined;
-                            headers = {};
-                            method = oc.headers[":method"];
-                            address = oc.remoteAddr;
-                            path = oc.headers[":path"];
-                            httpVersion = "HTTP/2";
-                            data = td.decode(oc.body);
-                        };
-                        for (let h in oc.headers) {
-                            let v = oc.headers[h];
-                            if (h[0] != ":") client.headers[h] = v;
-                            else if (h == ":authority") client.headers.host = v;
-                        };
-
-                        return client;
-                    };
-                    get isWebSocket(): boolean { return false };
-                    get type(): string { return type };
-                    get enabled(): boolean { return th.closed };
-                    get status() { return th.status };
-                    set status(s) { th.status = s };
-                    statusMessage = "";
-                    get compress() { return th.compress };
-                    setHeader(name: string, value: string): boolean { th.setHeader(name, value); return true };
-                    removeHeader(name: string): boolean { return th.removeHeader(name) };
-                    writeHead(status?: number, statusMessage?: string, headers?: Record<string, string>): boolean {
-                        if (status) th.status = status;
-                        if (headers) for (let [h, v] of Object.entries(headers)) th.setHeader(h, v);
-                        return true;
-                    };
-                    headers(): Record<string, string> { return th.headers };
-                    async writeText(str: string): Promise<void> { const b = te.encode(str); written.push(...b); await th.write(b) };
-                    async writeBuffer(b: Uint8Array): Promise<void> { written.push(...b); await th.write(b) };
-                    async close(d?: Uint8Array | string): Promise<void> { if (d) { let b = d; if (typeof d == "string") b = te.encode(d); written.push(...b) }; await th.close(d) };
-                    written(): Uint8Array { return new Uint8Array(written) };
-                    deny() { th.reset() };
-                    async websocket(): Promise<WebSocket | void> { return undefined };
-                    async http2(): Promise<Http2Socket | void> { return http2 };
-                };
-                return psock;
-            }
-        };
+        const hand = new StreamHandler(frame, flowInit, flow, td, te, tcp, remoteAddr, http2, usedSids, type, sid, headers, body);
         return hand;
     };
 
@@ -583,7 +423,7 @@ export class Http2Socket extends StandardMethods {
         frameBuffer.set(part);
         frameBuffer.set(payload, 9);
 
-
+        console.log("frame buffer",frameBuffer); // :REMOVE:
 
         return frameBuffer
     };
@@ -591,7 +431,7 @@ export class Http2Socket extends StandardMethods {
         if (!options) options = {};
 
         if (libOpt.debug) console.log("make frame", streamId, type, options);
-        //console.log("resframe", type, streamId, options); // ::REMOVE
+        console.log("resframe", type, streamId, options); // :REMOVE:
 
         let flags = options?.flags || 0;
         let data = options?.data || new Uint8Array;
@@ -692,7 +532,7 @@ export class Http2Socket extends StandardMethods {
 
                 const svkl: Record<string, number> = {};
                 const nvkl: Record<number, number> = {};
-                const frame: Http2Frame = {
+                const frame: Http2Frame = new Http2Frame({
                     raw: {
                         length: length,
                         type: buff[3],
@@ -721,7 +561,7 @@ export class Http2Socket extends StandardMethods {
                     settings: { str: svkl, int: nvkl },
 
                     //extraLength:extraLen,
-                };
+                });
 
                 if ([0, 1].includes(frame.raw.type)) {
                     if (frame.raw.flags & 0x01) frame.flags.push("end_stream");
@@ -814,4 +654,255 @@ export class Http2Socket extends StandardMethods {
             yield last[0];
         } catch (err) { this.emit("error", err); };
     };
+};
+
+export class StreamHandler extends StandardMethods {
+    #frame: (streamId: number, type: number | string, options?: any) => Promise<{ buffer: Uint8Array }>; #flowInit: (sid: number) => void;
+    #flow: Record<number, number>; #td: TextDecoder; #te: TextEncoder; #tcp: Deno.TcpConn;
+    #ra: Deno.NetAddr; #http2: Http2Socket; #type: string; #usedSids: number[];
+    #sid: number; #cheaders: Record<string, string>; #body: Uint8Array;
+    constructor(frame, flowInit, flow, td, te, tcp, remoteAddr, http2, usedSids, type, sid, headers, body) {
+        super();
+        //const frame = (...a) => this.#frame(...a);
+        //const flowInit = (sid: number) => this.#flowInit(sid);
+        this.#frame = frame;
+        this.#flowInit = flowInit;
+        //const setting = this.#setting;
+        //const settings = this.#settings;
+        //const hpack = this.#hpack;
+        this.#flow = flow;
+        this.#td = td;
+        this.#te = te;
+        this.#tcp = tcp;
+        this.#ra = remoteAddr;
+        this.#http2 = http2;
+        this.#usedSids = usedSids;
+        this.#type = type;
+
+        this.#sid = sid;
+        this.#cheaders = headers;
+        this.#body = body;
+
+        this.#client = { body: new Uint8Array(body), headers, remoteAddr };
+    }
+
+
+    #client: Client2;// = { body: new Uint8Array(body), headers, remoteAddr };
+    #closed = false;
+
+    get client(): Client2 { return this.#client };
+    get closed(): boolean { return this.#closed };
+
+    get type(): string { return this.#type };
+
+    get compress(): boolean { return false };
+    #compress(t, b): Uint8Array | void {
+        if (t == "gzip") return compress.gzip(b);
+    };
+
+    #headers: Record<string, string> = {};
+    #sysHeaders: Record<string, string> = { ":status": "200" };
+    #sentHead = false;
+    get status(): number { return parseInt(this.#sysHeaders[":status"]) };
+    set status(status: number) { this.#sysHeaders[":status"] = status.toString() };
+    setHeader(name: string, value: string): void {
+        let no = ["connection"], nam = name.toString().toLowerCase();
+        if (!no.includes(nam)) this.#headers[nam] = value.toString();
+    };
+    removeHeader(name: string): boolean { return delete this.#headers[name.toLowerCase()] };
+    headers(): Record<string, string> { return { ...this.#headers, ...this.#sysHeaders } };
+    async reset(): Promise<boolean> {
+        let suc = await this.#tcp.write(await this.#frame(this.#sid, 3, { data: "\x00\x00\x00\x00" }).then(f => f.buffer))//.then(r=>r?this.#closed=true:false)
+        if (suc) {
+            this.#closed = true;
+            this.#usedSids.splice(this.#usedSids.indexOf(this.#sid), 1);
+            return true;
+        } else return false
+    };
+    #write(buff: Uint8Array): Promise<boolean> { return this.#tcp.write(buff).then(r => true).catch(e => false); };
+    #getHeadBuff(end: boolean) {
+        this.#sysHeaders.date = new Date().toGMTString();
+        this.#sysHeaders.vary = "Accept-Encoding";
+        let head;
+        if (!end) head = this.#frame(this.#sid, 1, { headers: { ":status": this.#sysHeaders[":status"], ...this.#headers, ...this.#sysHeaders }, flags: ["end_headers"] });  // sys headers last to overule any simulated user headers such as `:status`
+        else head = this.#frame(this.#sid, 1, { headers: { ":status": this.#sysHeaders[":status"], ...this.#headers, ...this.#sysHeaders }, flags: ["end_headers", "end_stream"] });
+        return head;
+    }
+    async#sendHead(end?: boolean) {
+        if (!this.#sentHead) {
+            const head = await this.#getHeadBuff(!!end);
+            this.#sentHead = true;
+            return await this.#write(head.buffer);
+        } else return false;
+    };
+
+    get sizeLeft() { return this.#flow[this.#sid] };
+    #flowSize(len: number, stid: number = this.#sid): boolean {
+        if (!this.#flow[stid]) this.#flowInit(stid);
+        return this.#flow[stid] - len > 0 && this.#flow[0] - len > 0;
+    }
+    #flowPass(len: number, stid: number = 0): boolean {
+        if (this.#flowSize(len, stid)) {
+            this.#flow[stid] -= len; this.#flow[0] -= len;
+            return true;
+        } else return false;
+    }
+
+    async write(data: string | Uint8Array) {
+        if (this.#closed) return false;
+        await this.#sendHead();
+        if (!this.#flowSize(data.length)) throw new Error("window size too small");
+        const dataFrame = await this.#frame(this.#sid, "data", { data });
+        this.#flowPass(data.length);
+        return await this.#write(dataFrame.buffer);
+    };
+
+    async close(data?: string | Uint8Array) {
+        if (this.#closed) return false;
+        if (data && !this.#flowSize(data.length)) throw new Error("window size too small");
+        if (data) this.#flowPass(data.length);
+        if (!data) return await this.#sendHead(true);
+        //else await this.#sendHead();
+        else if (!this.#sentHead) {
+            this.#sysHeaders["content-length"] = data.length.toString();
+            const h = await this.#getHeadBuff(false).then(f => f.buffer);
+            const dat = await this.#frame(this.#sid, "data", { flags: ["end_stream"], data }).then(f => f.buffer);
+            return await this.#write(new Uint8Array([...h, ...dat]));
+        } else {
+            const dat = await this.#frame(this.#sid, "data", { flags: ["end_stream"], data });
+            return await this.#write(dat.buffer);
+        }
+    };
+
+    async push(req: Record<string, string>, headers: Record<string, string>, data: string | Uint8Array): Promise<boolean> {
+        if (!this.#http2.pushEnabled) return false;
+        //if(flow[0]-data.length<0)throw new Error("window size too small");
+        let max = this.#http2.mainIntSettings[3];
+        if (max > 300) max = 300;
+        let nsid: number = -1;
+        for (let i = 0, rsid = Math.round(Math.random() * max); i < 5; i++) {
+            if (!this.#usedSids.includes(rsid)) {
+                nsid = rsid;
+                break;
+            }
+        };
+        if (nsid == -1) return false;
+        this.#flowInit(nsid);
+        if (!this.#flowSize(data.length, nsid)) throw new Error("window size too small");
+        //let sidb=(nsid.toString(16).padStart(8,"0").match(/.{1,2}/g)||[]).map(v=>parseInt(v,16));
+        let pf = await this.#frame(this.#sid, 5, { targetStreamId: nsid, headers: req }).then(f => f.buffer);
+        let hf = await this.#frame(nsid, 1, { flags: ["end_headers"], headers }).then(f => f.buffer);
+        let df = await this.#frame(nsid, 0, { flags: ["end_stream"], data }).then(f => f.buffer);
+        //if(flow[0]-data.length>0)df=frame(nsid,0,{flags:["end_stream"],data}).buffer;
+        //else throw new Error("window size too small");
+        let jf = new Uint8Array([...pf, ...hf, ...df]);
+        let suc = await this.#write(jf);
+        return suc;
+    };
+
+    pseudo(): PseudoHttpSocket { // future
+        const th = this;
+        const oc = th.client;
+        const written: number[] = [];
+        const psock = new PseudoHttpSocket(th, this.#http2, oc, written, this.#td, this.#te);
+        return psock;
+    };
+};
+type Http2Stream=StreamHandler;
+export { StreamHandler as Http2Stream };
+
+export class PseudoHttpSocket extends StandardMethods {
+    #th: Http2Stream; #oc: Client2; #written;
+    #td: TextDecoder; #te: TextEncoder; #http2: Http2Socket;
+    constructor(th, http2, oc, written, td, te) {
+        super();
+        this.#th = th;
+        this.#oc = oc;
+        this.#written = written;
+        this.#td = td;
+        this.#te = te;
+        this.#http2 = http2;
+    }
+
+    get socket(): PseudoHttpSocket { return this };
+    get client(): PseudoClient {
+        const client: PseudoClient = new PseudoClient;
+        client.method = this.#oc.headers[":method"];
+        client.address = this.#oc.remoteAddr
+        client.path = this.#oc.headers[":path"]
+        for (let h in this.#oc.headers) {
+            let v = this.#oc.headers[h];
+            if (h[0] != ":") client.headers[h] = v;
+            else if (h == ":authority") client.headers.host = v;
+        };
+
+        return client;
+    };
+    get isWebSocket(): boolean { return false };
+    get type(): string { return this.#http2.type };
+    get enabled(): boolean { return this.#th.closed };
+    get status() { return this.#th.status };
+    set status(s) { this.#th.status = s };
+    statusMessage = "";
+    get compress() { return this.#th.compress };
+    setHeader(name: string, value: string): boolean { this.#th.setHeader(name, value); return true };
+    removeHeader(name: string): boolean { return this.#th.removeHeader(name) };
+    writeHead(status?: number, statusMessage?: string, headers?: Record<string, string>): boolean {
+        if (status) this.#th.status = status;
+        if (headers) for (let [h, v] of Object.entries(headers)) this.#th.setHeader(h, v);
+        return true;
+    };
+    headers(): Record<string, string> { return this.#th.headers() };
+    async writeText(str: string): Promise<void> { const b = this.#te.encode(str); this.#written.push(...b); await this.#th.write(b) };
+    async writeBuffer(b: Uint8Array): Promise<void> { this.#written.push(...b); await this.#th.write(b) };
+    async close(d?: Uint8Array | string): Promise<void> { if (d) { let b = d; if (typeof d == "string") b = this.#te.encode(d); this.#written.push(...b) }; await this.#th.close(d) };
+    written(): Uint8Array { return new Uint8Array(this.#written) };
+    deny() { this.#th.reset() };
+    async websocket(): Promise<WebSocket | void> { return undefined };
+    async http2(): Promise<Http2Socket | void> { return this.#http2 };
+};
+
+export class PseudoClient {
+    isValid = true;
+    err = undefined;
+    headers: Record<string, string> = {};
+    method: string;// = oc.headers[":method"];
+    address: Deno.NetAddr// = oc.remoteAddr;
+    path: string;// = oc.headers[":path"];
+    httpVersion = "HTTP/2";
+    data: string;// = td.decode(oc.body);
+};
+
+export class Http2Frame {
+    constructor(obj={}){
+        Object.assign(this,obj);
+    };
+
+    raw:{
+        length: number[],
+        type: number,
+        flags: number,
+        stream: number[],
+        payload: number[],
+        extraPayload: number[],
+        padding: number[],
+    };
+    type: number;
+
+    flags:string[]=[];
+    length:number;
+    streamId:number;
+
+    buffer: Uint8Array;
+    headers:Record<string,string>= {};
+
+    error: {
+        code: number,
+        streamId: number,
+        message: Uint8Array,
+    };
+
+    //_settingsRaw:[],
+    settings: { str: Record<string,number>, int: Record<number,number> };
+    //extraLength:extraLen,
 };

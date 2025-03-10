@@ -586,7 +586,12 @@ interface Http2Stream extends StandardMethods{
     /**
      * Removes a single header.
      */
-    removeHeader(name:string,value:string):void;
+    removeHeader(name:string):boolean;
+
+    /**
+     * Returns all response headers
+     */
+    headers(): Record<string,string>;
 
     /**
      * Indicates the window size, so how much data can still be written. Used for flow control.
@@ -607,6 +612,11 @@ interface Http2Stream extends StandardMethods{
      * Sends a data frame to the client with an end stream flag and sends the headers.
      */
     close(data:string|Uint8Array):Promise<boolean>;
+
+    /**
+     * Contains whether the socket has closed or not.
+     */
+    readonly closed:boolean;
 
     /**
      * Performs a PUSH_PROMISE. Resolves with true if successful. If not, false.

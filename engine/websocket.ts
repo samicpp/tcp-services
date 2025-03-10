@@ -1,5 +1,5 @@
 import "./lib.deno.d.ts";
-import { StandardMethods } from "./std-methods.ts";
+import { Eventable as StandardMethods } from "./standard.ts";
 import { libOpt } from "./debug.ts";
 import { ByteLib } from "./buffer.ts";
 
