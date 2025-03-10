@@ -1,4 +1,5 @@
 import "./lib.deno.d.ts";
+import "./lib.engine.d.ts";
 import { Eventable as StandardMethods } from "./standard.ts";
 import { libOpt } from "./debug.ts";
 import { ByteLib } from "./buffer.ts";
@@ -15,9 +16,9 @@ const { readableStreamFromIterable } = streams;
 const bytelib = new ByteLib;
 
 export class Http2Socket extends StandardMethods {
-    #engine: Engine; #tcp: Deno.TcpConn; #ra: Deno.NetAddr;
+    #engine: EngineReplacer; #tcp: Deno.TcpConn; #ra: Deno.NetAddr;
     #td: TextDecoder; #te: TextEncoder; #data: Uint8Array; #type: string;
-    #socket: HttpSocket|null; #ready: Promise<boolean>; #client1: Client|void;
+    #socket: HttpSocket | null; #ready: Promise<boolean>; #client1: Client | void | null;
 
     #readSize = 1024 * 10;
     set readSize(int: any) {
@@ -28,7 +29,7 @@ export class Http2Socket extends StandardMethods {
     get type(): string { return this.#type };
 
 
-    constructor(engine: any, td: TextDecoder, te: TextEncoder, tcp: Deno.TcpConn, data: Uint8Array, socket: HttpSocket|null, type: string, remoteAddr: Deno.NetAddr) {
+    constructor(engine: any, td: TextDecoder, te: TextEncoder, tcp: Deno.TcpConn, data: Uint8Array, socket: HttpSocket | null, type: string, remoteAddr: Deno.NetAddr) {
         super();
 
         this.#td = td;
@@ -51,7 +52,7 @@ export class Http2Socket extends StandardMethods {
     get ready(): Promise<boolean> { return this.#ready };
 
     #buffer = new Uint8Array(0);
-    async#read(): Promise<Uint8Array> { return new Uint8Array([...this.#buffer.subarray(0, await this.#tcp.read(this.#buffer))]); };
+    async#read(): Promise<Uint8Array> { return new Uint8Array([...this.#buffer.subarray(0, (await this.#tcp.read(this.#buffer))||0)]); };
     updateSize(size?: number): void { this.#buffer = new Uint8Array(this.#readSize = size || this.#readSize); };
     //async init(){} // not applicable
     #magic = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
@@ -131,7 +132,7 @@ export class Http2Socket extends StandardMethods {
             for await (let f of this.#packet(first)) fframes.push(f);
             const headers: Record<number, Record<string, string>> = {};
             const headersBuff: Record<number, number[]> = {};
-            const bodies: Record<number, number[]|Uint8Array> = {};
+            const bodies: Record<number, number[] | Uint8Array> = {};
             //const pack=await this.#read();
             //const frames=[...this.#packet(pack)];
             /*for(let f of fframes){
@@ -162,9 +163,9 @@ export class Http2Socket extends StandardMethods {
                                 else for (let si in fr.settings.int) settings[fr.streamId][si] = fr.settings.int[si];
                             };
                             if (fr.settings.int[4]) flow[fr.streamId] = fr.settings.int[4];
-                            const nf=await this.#frame(fr.streamId, 4, { flags: ["ack"] });
+                            const nf = await this.#frame(fr.streamId, 4, { flags: ["ack"] });
                             //console.log("setting acknowledgement",nf); // :REMOVE:
-                            let r=await this.#tcp.write(nf.buffer).catch(e => e);
+                            let r = await this.#tcp.write(nf.buffer).catch(e => e);
                             //console.log("write result",r); // :REMOVE:
                         } else if (fr.raw.type == 8) {
                             let wu = fr.buffer;
@@ -249,7 +250,7 @@ export class Http2Socket extends StandardMethods {
         this.#flow[sid] = this.#setting[4];
     }
     async#handler(sid, headers, body): Promise<Http2Stream> {
-        const frame = (sid,type,opt) => this.#frame(sid,type,opt);
+        const frame = (sid, type, opt) => this.#frame(sid, type, opt);
         const flowInit = (sid: number) => this.#flowInit(sid);
         const setting = this.#setting;
         const settings = this.#settings;
@@ -813,7 +814,7 @@ export class StreamHandler extends StandardMethods {
         return psock;
     };
 };
-type Http2Stream=StreamHandler;
+type Http2Stream = StreamHandler;
 export { StreamHandler as Http2Stream };
 
 export class PseudoHttpSocket extends StandardMethods {
@@ -879,11 +880,11 @@ export class PseudoClient {
 };
 
 export class Http2Frame {
-    constructor(obj={}){
-        Object.assign(this,obj);
+    constructor(obj = {}) {
+        Object.assign(this, obj);
     };
 
-    raw:{
+    raw: {
         length: number[],
         type: number,
         flags: number,
@@ -894,12 +895,12 @@ export class Http2Frame {
     };
     type: number;
 
-    flags:string[]=[];
-    length:number;
-    streamId:number;
+    flags: string[] = [];
+    length: number;
+    streamId: number;
 
     buffer: Uint8Array;
-    headers:Record<string,string>= {};
+    headers: Record<string, string> = {};
 
     error: {
         code: number,
@@ -908,6 +909,6 @@ export class Http2Frame {
     };
 
     //_settingsRaw:[],
-    settings: { str: Record<string,number>, int: Record<number,number> };
+    settings: { str: Record<string, number>, int: Record<number, number> };
     //extraLength:extraLen,
 };

@@ -61,7 +61,7 @@ export class HttpSocket extends StandardMethods {
       err: void | object;
       headers: Record<string, string> = {};
       method: string;
-      address: object;
+      address: Deno.NetAddr;
       path: string;
       httpVersion: string;
       data: string;
@@ -260,7 +260,7 @@ export class HttpSocket extends StandardMethods {
     if (!this.enabled) return null;
 
 
-    const args = [
+    const args:[Engine|EngineReplacer,TextDecoder,TextEncoder,Deno.TcpConn,Uint8Array,HttpSocket] = [
       this.#engine,
       this.#td,
       this.#te,

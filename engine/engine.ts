@@ -43,12 +43,14 @@ export var pHost: string = "0.0.0.0";
 export var pPort: number = 1;
 export var pPort2: number = 2;
 
-export const _this: Eventable = new class EngineReplacer extends Eventable{
+export class EngineReplacer extends Eventable{
     get WebSocket(){return WebSocket};
     get HttpSocket(){return    Socket};
     get Http2Socket(){return   Socket2};
     get readSize(){return _readSize};
-} 
+};
+
+export const _this: Eventable = new EngineReplacer;
 
 
 export function _server(port: number, host: string) {

@@ -145,7 +145,7 @@ interface HttpSocket extends StandardMethods {
     /**
      * Metadata about the client making the request.
      */
-    readonly client: Client;
+    readonly client: Client|null;
 
     /**
      * Indicates if the current connection has been upgraded to a WebSocket.
@@ -212,7 +212,7 @@ interface HttpSocket extends StandardMethods {
      * @param headers Optional. Key-value pairs of headers to set.
      * @returns `true` if headers were successfully set, `false` otherwise.
      */
-    writeHead(status?: number, statusMessage?: string, headers?: object): boolean;
+    writeHead(status?: number, statusMessage?: string, headers?: object): void;
 
     /**
      * Returns all headers as an object
@@ -256,7 +256,7 @@ interface HttpSocket extends StandardMethods {
      * 
      * @returns A `WebSocket` instance if successful, otherwise `void`.
      */
-    websocket(): Promise<WebSocket | void>;
+    websocket(): Promise<WebSocket | null>;
 
     /**
      * Upgrade the current connection to HTTP2
