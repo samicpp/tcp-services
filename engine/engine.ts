@@ -4,7 +4,7 @@ import { Eventable } from "./standard.ts";
 //import { ByteLib } from "./buffer.ts";
 import { HttpSocket as Socket } from "./http-socket.ts";
 import { Http2Socket as Socket2 } from "./http2-socket.ts";
-//import { WebSocket } from "./websocket.ts";
+import { WebSocket } from "./websocket.ts";
 
 //const tx=new ByteLib;
 //const servers:Deno.TcpListener[]=[];
@@ -43,7 +43,12 @@ export var pHost: string = "0.0.0.0";
 export var pPort: number = 1;
 export var pPort2: number = 2;
 
-export const _this: Eventable = new class EngineReplacer extends Eventable{} 
+export const _this: Eventable = new class EngineReplacer extends Eventable{
+    get WebSocket(){return WebSocket};
+    get HttpSocket(){return    Socket};
+    get Http2Socket(){return   Socket2};
+    get readSize(){return _readSize};
+} 
 
 
 export function _server(port: number, host: string) {

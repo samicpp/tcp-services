@@ -51,7 +51,7 @@ export class Http2Socket extends StandardMethods {
     get ready(): Promise<boolean> { return this.#ready };
 
     #buffer = new Uint8Array(0);
-    async#read(): Promise<Uint8Array> { return new Uint8Array([...this.#buffer.subarray(0, (await this.#tcp.read(this.#buffer)) || 0)]); };
+    async#read(): Promise<Uint8Array> { return new Uint8Array([...this.#buffer.subarray(0, await this.#tcp.read(this.#buffer))]); };
     updateSize(size?: number): void { this.#buffer = new Uint8Array(this.#readSize = size || this.#readSize); };
     //async init(){} // not applicable
     #magic = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
@@ -76,9 +76,11 @@ export class Http2Socket extends StandardMethods {
             let first, ifr;
             try {
                 first = firstData || await this.#read();
+                //if(first.length==0)first=await this.#read();
                 const mc = first.subarray(0, this.#magic.length);
                 ifr = first.subarray(this.#magic.length);
                 if (mc == this.#magicASCII) valid = true;
+                //console.log("beginning is magic?",mc,this.#magicASCII,mc==this.#magicASCII,first,firstData); // :REMOVE:
             } catch (err) {
                 this.emit("error", err);
             };
@@ -91,6 +93,7 @@ export class Http2Socket extends StandardMethods {
             return true;
 
         } catch (err) {
+            //console.log("error during h2 init",err); // :REMOVE:
             this.emit("error", err);
             return false;
         }
@@ -147,7 +150,7 @@ export class Http2Socket extends StandardMethods {
             while (true) {
                 try {
                     for (const fr of frames) {
-                        console.log(fr.type, fr); // :REMOVE:
+                        //console.log(fr.type, fr); // :REMOVE:
                         if (libOpt.debug) console.log(fr.type, fr);
                         if (!this.#usedSids.includes(fr.streamId)) this.#usedSids.push(fr.streamId);
                         if (fr.streamId != 0 && !flow[fr.streamId]) this.#flowInit(fr.streamId);//flow[fr.streamId]=setting[4];
@@ -198,6 +201,7 @@ export class Http2Socket extends StandardMethods {
 
                     if (!usedSocket && this.#socket && this.#client1) {
                         // means http2 upgrade took place
+                        //console.log("using data from old http1 connection"); // :REMOVE:
                         const socket: HttpSocket = this.#socket;
                         const client: Client = this.#client1;
                         headers[1] = {};
@@ -214,6 +218,7 @@ export class Http2Socket extends StandardMethods {
 
 
                     // loop back
+                    //console.log("loop back, reading tcp again"); // :REMOVE:
                     const pack = await this.#read().catch(e => new Uint8Array);
                     frames.length = 0;
                     for await (let f of this.#packet(pack)) frames.push(f);
@@ -423,7 +428,7 @@ export class Http2Socket extends StandardMethods {
         frameBuffer.set(part);
         frameBuffer.set(payload, 9);
 
-        console.log("frame buffer",frameBuffer); // :REMOVE:
+        //console.log("frame buffer",frameBuffer); // :REMOVE:
 
         return frameBuffer
     };
@@ -431,7 +436,7 @@ export class Http2Socket extends StandardMethods {
         if (!options) options = {};
 
         if (libOpt.debug) console.log("make frame", streamId, type, options);
-        console.log("resframe", type, streamId, options); // :REMOVE:
+        //console.log("resframe", type, streamId, options); // :REMOVE:
 
         let flags = options?.flags || 0;
         let data = options?.data || new Uint8Array;
@@ -634,7 +639,7 @@ export class Http2Socket extends StandardMethods {
                     frame.error.code = parseInt(frame.raw.payload.map(v => v.toString(16).padStart(2, "0")).join(''), 16);
                 };
 
-                //console.log("frame", frame.type, frame.streamId, frame); // ::REMOVE
+                //console.log("frame", frame.type, frame.streamId, frame); // :REMOVE:
 
                 let remain = buff.subarray(9 + lenInt);
                 return [frame, remain];

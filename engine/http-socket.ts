@@ -2,6 +2,8 @@ import "./lib.deno.d.ts";
 import { Eventable as StandardMethods } from "./standard.ts";
 import { libOpt } from "./debug.ts";
 import { ByteLib } from "./buffer.ts";
+import { Http2Socket } from "./http2-socket.ts";
+import { WebSocket } from "./websocket.ts";
 
 import * as compress from "jsr:@deno-library/compress";
 
@@ -266,7 +268,7 @@ export class HttpSocket extends StandardMethods {
       this.#data,
       this,
     ];
-    const ws: WebSocket = new this.#engine.WebSocket(...args)
+    const ws: WebSocket = new WebSocket(...args)
     this.#ws = ws;
     let suc: boolean = await ws.init("http1");
     if (suc) {
@@ -295,7 +297,7 @@ export class HttpSocket extends StandardMethods {
       await this.#tcp.write(this.#te.encode(res)).catch(e => e);
 
 
-      const args = [
+      const args:[StandardMethods,TextDecoder,TextEncoder,Deno.TcpConn,Uint8Array,HttpSocket,string,Deno.NetAddr] = [
         this.#engine,
         this.#td,
         this.#te,
@@ -305,10 +307,13 @@ export class HttpSocket extends StandardMethods {
         this.#type,
         this.#ra,
       ];
-      const http2: Http2Socket = new this.#engine.Http2Socket(...args);
+      const http2: Http2Socket = new Http2Socket(...args);
       this.#http2 = http2;
 
+      console.log("h2c upgrade succesfull",http2); // :REMOVE:
+
       let suc: boolean = await http2.ready;
+      console.log("succesfull?",suc); // :REMOVE:
       if (suc) {
         this.#upgraded = true;
         return http2;
