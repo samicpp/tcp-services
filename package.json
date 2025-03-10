@@ -1,9 +1,0 @@
-{
-  "dependencies": {
-    "assemblyscript": "^0.27.34",
-    "hpack": "^1.0.0",
-    "hpack.js": "^2.1.6",
-    "ollama": "^0.5.14",
-    "openai": "^4.86.2"
-  }
-}

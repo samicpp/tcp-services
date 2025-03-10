@@ -1,6 +1,6 @@
-import {Engine,setOpt} from './engine.ts';
+import {Engine,setOpt} from './engine/mod.ts';
 import * as http from './http-server.ts';
-import "./docs.d.ts";
+import "./engine/docs.d.ts";
 import "./lib.deno.d.ts";
 import * as Logsole from './console.ts';
 //import "jsr:@std/dotenv/load";
@@ -20,14 +20,21 @@ const tc={
 setOpt("debug",false);
 setOpt("eventDbg",false);
 
-/**/await Deno.stat("./.env").then(f=>{
+/**/await deno.stat("./.env").then(f=>{
     if(!f.isFile){
         logsole.fatal(new Error(".env isn't a file"));
-        Deno.exit(2);
+        deno.exit(2);
     }
 }).catch(err=>{
     logsole.error(err);
-    Deno.writeFile(
+    // write default env
+
+    deno.env.set("envonly","0");
+    deno.env.set("usetls","0");
+
+    deno.env.set("http","8080");
+
+    /*Deno.writeFile(
         ".env",
         tc.e('# main.ts\nenvonly="1"\n\ndyn=""\nhttp="8080"\nhttps=""\n\nsilent="0"\n\nuseTls="0"\nkeyfile=""\ncertfile=""\ncafile=""\nalpn=""\n\nlogcatfile="./logcat.log"\n\n# http-server.ts\nopenai_key=""\n\ndissallow=".no;.not"')
     ).then(async r=>{
@@ -36,7 +43,7 @@ setOpt("eventDbg",false);
     }).catch(err=>{
         logsole.fatal(err);
         Deno.exit(1);
-    });
+    });*/
 });//*/
 
 let args:{
