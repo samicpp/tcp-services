@@ -1,17 +1,20 @@
 # Tcp Services
-This project consists of 2 parts: [A library (`engine.ts`)](#enginets) and [a handler](#http-serverts) (`http-server.ts` and `main.ts`)
+This project consists of 2 parts: [A library (`engine.ts`)](#engine) and [a handler](#http-serverts) (`http-server.ts` and `main.ts`)
 
 ## HTTP
-- [`engine.ts`](#enginets): HTTP connection handling. [File](/engine.ts).
+- [`./engine`](#enginets): HTTP connection handling. [Module](/engine).
 - [`http-server.ts`](#http-serverts): Complex HTTP server using `engine.ts`. [File](/http-server.ts).
 - [`main.ts`](#maints): Responsible for setting up the HTTP server with `http-server.ts` and `engine.ts`. [File](/main.ts).
 
 This server is running on [www.cppdev.dev](https://www.cppdev.dev/?reff=github). If anything peculiar happens please notify me by [mail](https://gmail.com) to [sami.cplusplus0@gmail.com](mailto:sami.cplusplus0@gmail.com) or make an issue. Same goes for feature requests.
 
-### engine.ts
-Methods and use cases specified in `docs.ts`.
-Responsible for handling the HTTP connections starting from the TCP level with or without TLS. Supports HTTP/1.1, HTTP/2 and WebSocket.
-This file is located at [`/engine.ts`](/engine.ts).
+### engine
+A web handling library.
+Handles HTTP/1.1 HTTP/2.0 and WebSockets starting from the TCP/TLS level.
+A simple example is located in `local-test1.sh`.
+To use it for yourself, youll need to import `./engine/mod.ts`, all methods combined from the import make up Engine.
+You can also use specific parts such as the HTTP/2.0 handler alone.
+Types specified in `./engine/lib.engine.d.ts`
 
 
 ### http-server.ts

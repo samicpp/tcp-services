@@ -1,10 +1,16 @@
-import { Engine as engine, setOpt } from './engine/mod.ts';
+import { Engine, EngineLib } from './engine/mod.ts';
 import * as http from './http-server.ts';
 import "./engine/docs.d.ts";
+//import "./engine/lib.engine.d.ts";
 import "./lib.deno.d.ts";
 import * as Logsole from './console.ts';
+//import { Engine } from './engine/mod.ts';
 //import "jsr:@std/dotenv/load";
+
 const deno = Deno; // mitigate error messages in vscode
+const engine:Engine=EngineLib;
+const {setOpt}=engine;
+Engine
 
 let logcatPath = deno.env.get("logcatfile");
 const [logfile, logsole] = Logsole.default(logcatPath);
@@ -200,7 +206,7 @@ tcp.on("nulldata", e => logsole.log("no data"));
 tcp.on("error", e => logsole.error(e));
 // http2, should also make it a cli option
 tcp.on("connect", async ({ socket, client }: HttpSocket) => {
-    if (client.isValid && client.headers.upgrade?.includes("h2c")) {
+    if (client && client.isValid && client.headers.upgrade?.includes("h2c")) {
         const h2c = await socket.http2();
         if (h2c) {
             http.listener2(h2c);

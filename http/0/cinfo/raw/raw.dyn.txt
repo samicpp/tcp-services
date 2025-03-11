@@ -1,4 +1,4 @@
 ${socket.client.method} ${socket.client.path} ${socket.client.httpVersion}\r
 ${Object.entries(socket.client.headers).map(([k,v])=>k+': '+v).join('\r\n')}\r
 \r
-${socket.client.data}
+${socket.client.data||""}

@@ -1,3 +1,33 @@
+//export * from "./.archive/engine-full.ts";
+
+//import { Engine } from "./tcp-handler.ts";
+//import { libOpt, setOpt } from "./debug.ts";
+//export * from "./tcp-handler.ts";
+
+/* */
+
+//import "./lib.engine.d.ts";
+export * from "./engine.ts";
+//export * as Engine from "./engine.ts";
+import { libOpt, setOpt } from "./debug.ts";
+import {Http2Socket,Http2Frame,Http2Stream} from "./http2-socket.ts";
+import {HttpSocket} from "./http-socket.ts";
+import {WebSocket} from "./websocket.ts";
+
+//export * from "./engine.ts";
+//export * as Engine from "./engine.ts";
+export {
+    libOpt,
+    setOpt,
+    Http2Socket,
+    Http2Frame,
+    Http2Stream,
+    HttpSocket,
+    WebSocket,
+};
+export {}
+
+
 /// <reference lib="deno.ns" />
 
 // Basic event interface used by EngineReplacer.
@@ -96,3 +126,6 @@ export namespace Engine {
 }
 
 //export = Engine;
+
+
+// */
