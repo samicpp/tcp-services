@@ -3,6 +3,7 @@
 cstandalone.bat
 http/opdr
 http/config.json
+test/
 
 
 # dynamic files

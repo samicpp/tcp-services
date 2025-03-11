@@ -1,5 +1,5 @@
 import { Engine, EngineLib } from './engine/mod.ts';
-import * as http from './http-server.ts';
+import * as http from './http-server.tsx';
 import "./engine/docs.d.ts";
 //import "./engine/lib.engine.d.ts";
 import "./lib.deno.d.ts";

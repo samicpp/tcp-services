@@ -7,7 +7,8 @@ import ollama from "npm:ollama";
 import * as pdflib from "https://cdn.skypack.dev/pdf-lib@^1.11.1?dts";
 import * as pug from "https://deno.land/x/pug/mod.ts";
 import LS from "./console.ts";
-
+import React from "npm:react";
+import ReactDOMServer from "npm:react-dom/server";
   
 
 function envget(name:string,def:any=null):any{
@@ -293,6 +294,11 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
 
         if(stop){
           logsole.info("stop is true");
+        }else if(last.endsWith(".tsx")||last.endsWith(".jsx")){
+          const Mod=await import(get+"?d="+Date.now()).then(m=>m.default);
+          let r=ReactDOMServer.renderToString(<Mod />);
+          socket.setHeader("Content-Type","text/html");
+          await socket.close(r);
         }else if(last.endsWith(".deno.ts")){
           logsole.debug("importing deno thing",get);
           dynamic=true;
