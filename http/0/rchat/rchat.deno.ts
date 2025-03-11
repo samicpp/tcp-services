@@ -1,5 +1,7 @@
 //import docs from "../../../docs.d.ts";
+//import setup from "../../../console.ts";
 
+//const [logcat,logsole]=setup();
 
 let del:Function;
 let visits=0;
@@ -12,44 +14,49 @@ const room:WebSocket[]=[];
 let any:Record<string,Function>={}; // mitigare vscode warnings
 let console=new Proxy(any,{get(o,p){return imp.logsole[p]}});
 
-async function handler(dest:number,ws:WebSocket,frame:WsFrame){
-    console.log("ws.deno.ts frame",frame);
-    if(frame.opname=="ping")ws.pong(frame.payload);
-    else if(frame.opname=="pong")console.log("rchat.deno.ts pong received");
 
-    else if(frame.opname=="text"){
-        console.log("rchat.deno.ts got something");
-        let str=td.decode(frame.payload);
-        let tar=room[dest];
-        console.log("rchat.deno.ts",str);
-        if(str[0]=="!"){
-            let cmd=str.split(" ")[0];
-            switch(cmd){
-                case"!bin":
-                    tar.sendBinary(str.replace("!bin ",""));
-                    return;
-                
-                case"!ping":
-                    tar.ping("ping");
-                    return;
+async function handler(dest:number,ws:WebSocket,frame:WsFrame){
+    try{
+        console.log("ws.deno.ts frame",frame);
+        if(frame.opname=="ping")ws.pong(frame.payload);
+        else if(frame.opname=="pong")console.log("rchat.deno.ts pong received");
+
+        else if(frame.opname=="text"){
+            console.log("rchat.deno.ts got something");
+            let str=td.decode(frame.payload);
+            let tar=room[dest];
+            console.log("rchat.deno.ts",str);
+            if(str[0]=="!"){
+                let cmd=str.split(" ")[0];
+                switch(cmd){
+                    case"!bin":
+                        tar.sendBinary(str.replace("!bin ",""));
+                        return;
+                    
+                    case"!ping":
+                        tar.ping("ping");
+                        return;
+                }
             }
+            let r=tar.sendText(frame.payload);
+            console.log("rchat.deno.ts forward result",r);
         }
-        let r=tar.sendText(frame.payload);
-        console.log("rchat.deno.ts forward result",r);
-    }
-    else if(frame.opname=="close"&&!closing){
-        console.log("rchat.deno.ts client closing", td.decode(frame.close.message));
-        if(frame.close.code==-1){
-            console.log("rchat.deno.ts client didnt send any closure data");
-            ws.close(1002, "Client initiated closure. Cannot read closure code");
+        else if(frame.opname=="close"&&!closing){
+            console.log("rchat.deno.ts client closing", td.decode(frame.close.message));
+            if(frame.close.code==-1){
+                console.log("rchat.deno.ts client didnt send any closure data");
+                ws.close(1002, "Client initiated closure. Cannot read closure code");
+            }
+            else ws.close(frame.close.code,"Client initiated closure");
+            del();
         }
-        else ws.close(frame.close.code,"Client initiated closure");
-        del();
-    }
-    else if(frame.opname=="close"&&closing){
-        console.log("rchat.deno.ts close acknowledgement received");
-        ws.end();
-        del();
+        else if(frame.opname=="close"&&closing){
+            console.log("rchat.deno.ts close acknowledgement received");
+            ws.end();
+            del();
+        }
+    }catch(err){
+        console.error(err);
     }
 }
 

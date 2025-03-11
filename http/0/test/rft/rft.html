@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Random WebRTC Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      text-align: center;
+      padding: 20px;
+    }
+    #videos {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    video {
+      width: 45%;
+      margin: 10px;
+      background: #000;
+      border: 2px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>Random WebRTC Chat</h1>
+  <div id="videos">
+    <video id="localVideo" autoplay muted playsinline></video>
+    <video id="remoteVideo" autoplay playsinline></video>
+  </div>
+  <script>
+    // Connect to the signaling server using the /rchat endpoint.
+    const wsProtocol = (location.protocol === "https:" ? "wss://" : "ws://");
+    const ws = new WebSocket(wsProtocol + location.host + '/rchat');
+
+    let pc; // RTCPeerConnection instance.
+    const configuration = { 
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" }
+      ]
+    };
+
+    // When the WebSocket connection is open, start the process.
+    ws.onopen = () => {
+      console.log('Connected to signaling server');
+      start();
+    };
+
+    // Handle incoming signaling messages.
+    ws.onmessage = async (event) => {
+      const message = JSON.parse(event.data);
+      console.log("Received:", message);
+
+      // If we receive an offer from a remote peer...
+      if (message.type === 'offer') {
+        if (!pc) start();
+        await pc.setRemoteDescription(new RTCSessionDescription(message));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        ws.send(JSON.stringify(pc.localDescription));
+      }
+      // When an answer is received (in response to our offer)...
+      else if (message.type === 'answer') {
+        await pc.setRemoteDescription(new RTCSessionDescription(message));
+      }
+      // When an ICE candidate is received...
+      else if (message.type === 'candidate' && message.candidate) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
+        } catch (e) {
+          console.error('Error adding ICE candidate', e);
+        }
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error("WebSocket error:", err);
+    };
+
+    // Initializes the RTCPeerConnection, gets local media, and creates an offer.
+    async function start() {
+      pc = new RTCPeerConnection(configuration);
+
+      // Send ICE candidates to the signaling server.
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+        }
+      };
+
+      // When a remote stream is added, display it.
+      pc.ontrack = (event) => {
+        document.getElementById('remoteVideo').srcObject = event.streams[0];
+      };
+
+      // Get the local media stream.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        document.getElementById('localVideo').srcObject = stream;
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      } catch (err) {
+        console.error('Error accessing media devices:', err);
+        return;
+      }
+
+      // Create an offer if this client is the one starting the connection.
+      // The signaling server (on /rchat) should pair clients so one acts as caller.
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(JSON.stringify(pc.localDescription));
+        } catch (err) {
+          console.error('Error creating offer:', err);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
