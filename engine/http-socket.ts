@@ -1,4 +1,5 @@
 import "./lib.deno.d.ts";
+import "./library.d.ts";
 import { Eventable as StandardMethods } from "./standard.ts";
 import { libOpt } from "./debug.ts";
 import { ByteLib } from "./buffer.ts";
@@ -56,17 +57,7 @@ export class HttpSocket extends StandardMethods {
   get client(): Client | null {
     if (!this.enabled) return null;
     if (this.#client) return this.#client;
-    let c = new class Client {
-      isValid: boolean = false;
-      err: void | object;
-      headers: Record<string, string> = {};
-      method: string;
-      address: Deno.NetAddr;
-      path: string;
-      httpVersion: string;
-      data: string;
-      //proxied: boolean;
-    }();
+    let c = new Client();
     c.address = this.#ra;
 
     try {
@@ -103,11 +94,13 @@ export class HttpSocket extends StandardMethods {
   statusMessage: string = "OK";
   compress: boolean = false;
   encoding: string = "gzip";
+  get _sysHeaders(){return this.#sysHeaders};
   #sysHeaders: Record<string, string> = {
     "Connection": "close",
     "Keep-Alive": "timeout=5",
     "Date": new Date().toGMTString(),
   }
+  get _userHeaders(){return this.#userHeaders};
   #userHeaders: Record<string, string> = {
     "Content-Type": "text/html",
     //"Transfer-Encoding": "chunked",
@@ -116,7 +109,9 @@ export class HttpSocket extends StandardMethods {
   get #headers() { return { ...this.#userHeaders, ...this.#sysHeaders } };
   #headersSent = false;
   #headersPromise: Promise<void>;
+  get _writeTcp(){return this.#writeTcp};
   async #writeTcp(data) { if (libOpt.debug) console.log("write tcp", this.#td.decode(data), data)/*CHANGE LATER*/; return await this.#tcp.write(data).catch(e => e); };
+  get _headerString(){return this.#headerString};
   #headerString() {
     let headers: string[] = [];
     for (let k in this.#headers) {
@@ -125,6 +120,7 @@ export class HttpSocket extends StandardMethods {
     }
     return `HTTP/1.1 ${this.status} ${this.statusMessage}\r\n${headers.join("\r\n")}\r\n\r\n`;
   }
+  get _sendHeaders(){return this.#sendHeaders};
   async #sendHeaders(length?: number): Promise<void> {
     if (!this.#headersSent) {
       let resolve;
@@ -164,7 +160,10 @@ export class HttpSocket extends StandardMethods {
     //return this.#sendHeaders();
   }
   headers(): Record<string, string> { return { ...this.#headers }; }
+  get _written(){return this.#written};
   #written: number[] = [];
+
+  get _writeChunk(){return this.#writeChunk};
   async #writeChunk(buf: Uint8Array): Promise<void> {
     if (false && libOpt.debug) {
       console.log("chunk");
@@ -345,3 +344,14 @@ export class HttpSocket extends StandardMethods {
   }
   //set isWebSocket(iws:boolean){if(iws)this.websocket();}
 };
+export class Client {
+  isValid: boolean = false;
+  err: void | object;
+  headers: Record<string, string> = {};
+  method: string;
+  address: Deno.NetAddr;
+  path: string;
+  httpVersion: string;
+  data: string;
+  //proxied: boolean;
+}

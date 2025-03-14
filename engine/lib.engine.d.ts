@@ -1,5 +1,7 @@
 /// <reference lib="deno.ns" />
 
+// chatgpt
+
 // Basic event interface used by EngineReplacer.
 interface Eventable {
     on(name: string, listener: (obj: any) => void | Promise<void>): void;
@@ -16,6 +18,7 @@ export interface TlsOptions {
     ca?: string;
     alpnProtocols?: string[];
 }
+ 
 
 export namespace Engine {
     // EngineReplacer is an Eventable that exposes the networking classes.

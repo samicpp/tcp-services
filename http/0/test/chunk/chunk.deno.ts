@@ -1,3 +1,4 @@
+//import "../../../../library.d.ts";
 import cinit from "../../../../console.ts";
 const [logfile,logsole]=cinit();
 let del:Function;

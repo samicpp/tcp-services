@@ -248,7 +248,7 @@ export class Http2Socket extends StandardMethods {
     };
     #flowInit(sid: number) {
         this.#flow[sid] = this.#setting[4];
-    }
+    };
     async#handler(sid, headers, body): Promise<Http2Stream> {
         const frame = (sid, type, opt) => this.#frame(sid, type, opt);
         const flowInit = (sid: number) => this.#flowInit(sid);
@@ -267,7 +267,6 @@ export class Http2Socket extends StandardMethods {
         const hand = new StreamHandler(frame, flowInit, flow, td, te, tcp, remoteAddr, http2, usedSids, type, sid, headers, body);
         return hand;
     };
-
 
     get #hpack() { return new HPACK };
 
@@ -660,6 +659,31 @@ export class Http2Socket extends StandardMethods {
             yield last[0];
         } catch (err) { this.emit("error", err); };
     };
+
+
+    // all internal methods and objects/arrays. use at own risk.
+    get _packet(){return this.#packet};
+    get _frame(){return this.#frame};
+    get _frameBuffer(){return this.#frameBuffer};
+    get _settingsList2(){return this.#settingsList2};
+    get _settingsList(){return this.#settingsList};
+    get _frameFlags(){return this.#frameFlags};
+    get _frameTypes(){return this.#frameTypes};
+    get _hpackEncode(){return this.#hpackEncode};
+    get _hpackDecode(){return this.#hpackDecode};
+    get _hpackdContext(){return this.#hpackdContext};
+    get _danDecode(){return this.#danDecode};
+    get _danEncode(){return this.#danEncode};
+    get _hpack(){return this.#hpack};
+    get _handler(){return this.#handler};
+    get _flowInit(){return this.#flowInit};
+    get _respond(){return this.#respond};
+    get _listener(){return this.#listener};
+    get _usedSids(){return this.#usedSids};
+    get _flow(){return this.#flow};
+    get _settings(){return this.#settings};
+    get _setting(){return this.#setting};
+    get _read(){return this.#read};
 };
 
 export class StreamHandler extends StandardMethods {
