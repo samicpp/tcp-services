@@ -1,4 +1,4 @@
-import { Engine, EngineLib } from './engine/mod.ts';
+import { Engine, EngineLib, setOpt } from './engine/mod.ts';
 import * as http from './http-server.tsx';
 import "./engine/library.d.ts";
 //import "./engine/lib.engine.d.ts";
@@ -9,7 +9,7 @@ import * as Logsole from './console.ts';
 
 const deno = Deno; // mitigate error messages in vscode
 const engine:Engine=EngineLib;
-const {setOpt}=engine;
+//const {setOpt}=engine;
 Engine
 
 let logcatPath = deno.env.get("logcatfile");
@@ -162,7 +162,7 @@ logsole.allow = !silent;
 
 logsole.log(ports, sports, dports, silent);
 
-let allPerms = 0;[
+/*let allPerms = 0;[
     deno.permissions.querySync({ name: "net" }),
     deno.permissions.querySync({ name: "env" }),
     deno.permissions.querySync({ name: "read" }),
@@ -172,7 +172,7 @@ let allPerms = 0;[
 if (allPerms != 4) {
     logsole.error(`need net, env and file permissions`);
     deno.exit(1);
-}
+}*/
 
 let useTls = parseInt(deno.env.get("useTls") || "0");
 
@@ -191,6 +191,7 @@ if (useTls) {
         cert: "",
     };
 }
+
 
 
 const tcp = engine;

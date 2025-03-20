@@ -1,0 +1,5 @@
+{
+    "tasks": {
+      "start0": "deno run --env-file --allow-all main.ts"
+    }
+}

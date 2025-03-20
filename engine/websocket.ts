@@ -111,7 +111,11 @@ export class WebSocket extends StandardMethods {
             const buff = new Uint8Array(this.readSize);
             while (this.#listening) {
                 const read = await this.#tcp.read(buff);
-                if (!read) throw new Error("could not read frame");
+                if(read==null)break; // most likely closed;
+                //if(read==0)break; // maybe its closed;
+
+                if(!read)continue;
+                //if (!read) throw new Error("could not read frame");
 
                 const frameBuff = buff.subarray(0, read);
                 const frame = this.#parseFrame(frameBuff);
