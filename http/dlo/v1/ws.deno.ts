@@ -1,5 +1,5 @@
 //import docs from "../../../docs.d.ts";
-import Engine from "../../../engine/library.d.ts";
+import Engine from "../../../engine/library.js";
 import setup from "../../../console.ts";
 //import wsDeno from "../../0/ws/ws.deno.ts";
 
@@ -75,6 +75,7 @@ export async function init(socket: Engine.HttpSocket|Engine.PseudoHttpSocket, ur
         const websocket=new WebSocket(dloUrl(url.searchParams.get("userid")));
 
         let res:Event|CloseEvent=await new Promise(r=>{websocket.onopen=r;/*websocket.onerror=r*/;websocket.onclose=r});
+        logsole.log("ws.deno.ts res",res);
         if(websocket.readyState==1){
 
             let w=await socket.websocket();
