@@ -1,20 +1,21 @@
 # personal
-.env
-cstandalone.bat
-http/opdr
-http/config.json
+/.env
+/cstandalone.bat
+/http/opdr
+/http/config.json
 /test/*
+#/http/dlo
 
 
 # dynamic files
-logcat.out
-logcat.log
-last-pid.txt
-log/*
-tls-rs/target
+/logcat.out
+/logcat.log
+/last-pid.txt
+/log/*
+/tls-rs/target
 node_modules
 package.json
 package-lock.json
 
 # for other reasons
-bin/2.1.9/deno-2.1.9.zip
+/bin/2.1.9/deno-2.1.9.zip
