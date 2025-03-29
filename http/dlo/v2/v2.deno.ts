@@ -23,7 +23,7 @@ async function handler(ws:Engine.WebSocket,s:{closing:boolean},frame:WsFrame){
     try{
         logsole.log("v2.deno.ts frame",frame);
         if(frame.opname=="ping")ws.pong(frame.payload);
-        else if(frame.opname=="pong")logsole.log("v2.deno.ts pong received");
+        else if(frame.opname=="pong")logsole.log("v2.deno.ts pong frame received");
 
         else if(frame.opname=="text"){
             let str=td.decode(frame.payload);
@@ -37,6 +37,12 @@ async function handler(ws:Engine.WebSocket,s:{closing:boolean},frame:WsFrame){
                 j:Array<string|number|object>=JSON.parse(js);
                 console.log("v2.deno.ts echo",j);
                 j.forEach(m=>ws.sendText(String(m)));
+            }else if(str.startsWith("ping")){
+                logsole.log("v2.deno.ts received ping");
+                ws.sendText(str.replace("ping","pong"));
+                ws.ping("payload");
+            }else if(str.startsWith("pong")){
+                logsole.log("v2.deno.ts received pong");
             };
         }
         else if(frame.opname=="close"&&!s.closing){
