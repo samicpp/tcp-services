@@ -30,10 +30,10 @@ async function handler(ws:Engine.WebSocket,s:{closing:boolean},frame:WsFrame){
             logsole.log("v2.deno.ts got something",str);
             ;
             if(str.startsWith("access")){
-                const js=("{"+str.replace(/^.*\{/,""));
+                const js=("{"+str.replace(/^.*?\{/,""));
                 logsole.log("v2.deno.ts access",js);
             }else if(str.startsWith("echo")){
-                const js=("["+str.replace(/^.*\[/,"")),
+                const js=("["+str.replace(/^.*?\[/,"")),
                 j:Array<string|number|object>=JSON.parse(js);
                 console.log("v2.deno.ts echo",j);
                 j.forEach(m=>ws.sendText(String(m)));
