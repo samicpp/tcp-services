@@ -33,10 +33,10 @@ async function handler(ws:Engine.WebSocket,s:{closing:boolean},frame:WsFrame){
                 const js=("{"+str.replace(/^.*\{/,""));
                 logsole.log("v2.deno.ts access",js);
             }else if(str.startsWith("echo")){
-                const js=("{"+str.replace(/^.*\[/,"")),
-                j:Array<any>=JSON.parse(js);
+                const js=("["+str.replace(/^.*\[/,"")),
+                j:Array<string|number|object>=JSON.parse(js);
                 console.log("v2.deno.ts echo",j);
-                j.forEach(m=>ws.sendText(m));
+                j.forEach(m=>ws.sendText(String(m)));
             };
         }
         else if(frame.opname=="close"&&!s.closing){
