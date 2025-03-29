@@ -1,5 +1,5 @@
 //import docs from "../../../docs.d.ts";
-import Engine from "../../../engine/library.js";
+import Engine from "../../../engine/library.d.ts";
 import setup from "../../../console.ts";
 //import wsDeno from "../../0/ws/ws.deno.ts";
 
