@@ -9,6 +9,7 @@ import * as pug from "https://deno.land/x/pug/mod.ts";
 import LS from "./console.ts";
 import React from "npm:react";
 import ReactDOMServer from "npm:react-dom/server";
+import jso from 'npm:javascript-obfuscator';
   
 
 function envget(name:string,def:any=null):any{
@@ -267,22 +268,24 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
         }
     };
     async function file(get:string,opt?:object): Promise<void>{
+      async function jss(content:string,opt?:any|object): Promise<any>{
+        return await AsyncFunction("socket,url,get,opt,deno,imports",`return \`${content.replaceAll("`","\\`")}\`;`)(socket,url,get,opt,Deno,imports);
+      };
+
       try{
         if(cache(get,socket))return;
 
         const bytes = await readf(get);
-        let last=get.replace(/.*\//,"");
-        logsole.debug("file found",bytes.byteLength);
-        let ext=last.split(".");
-        let lext=ext[ext.length-1];
-        let dct=mime[""+lext];
+        const last=get.replace(/.*\//,"");
+        const ext=last.split(".");
+        const lext=ext[ext.length-1];
+        const dct=mime[""+lext];
+        const isJss=/.*\.dyn\.[a-z]+/.test(last);
         let dynamic=false;
-        let isJss=/.*\.dyn\.[a-z]+/.test(last);
         let stop=false;
 
-        async function jss(content,opt?){
-          return await AsyncFunction("socket,url,get,opt,deno,imports",`return \`${content.replaceAll("`","\\`")}\`;`)(socket,url,get,opt,Deno,imports);
-        }
+        logsole.debug("file found",bytes.byteLength);
+        
 
         for(let d of dissallow){
           if(last.endsWith(d)){
@@ -290,7 +293,17 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
             stop=true;
             break;
           }
-        }
+        };
+        const fstr=await(async()=>{
+          let fstr=td.decode(bytes);
+
+          if(!stop&&isJss){
+            logsole.debug("parsing as js multiline string");
+            fstr=await jss(fstr,opt);
+          };
+
+          return fstr;
+        })()
 
         if(stop){
           logsole.info("stop is true");
@@ -315,29 +328,43 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
         }else if(last.endsWith(".async.js")){
           logsole.debug("executing js code");
           dynamic=true;
-          let t=td.decode(bytes);
+          let t=fstr;//td.decode(bytes);
           let f=AsyncFunction("socket,url,get,opt,deno,imports,console",t);
           await f(socket,url,get,opt,Deno,imports,logsole);//.catch(err=>logsole.error(err));
         }else if(last.endsWith(".pug")){
           logsole.debug("compiling pug file")
-          let t=td.decode(bytes);
-          if(isJss){
-            logsole.debug("also executing as js multiline string");
-            t=await jss(t,opt);
-          };
-          let h=pug.compile(t);
+          // let t=td.decode(bytes);
+          // if(isJss){
+          //   logsole.debug("also executing as js multiline string");
+          //   t=await jss(t,opt);
+          // };
+          let h=pug.render(fstr);
           socket.setHeader("Content-Type","text/html");
           await socket.close(h);
-        }else if(isJss&&dct){
-          logsole.debug("parsing as js multiline string");
-          let t=td.decode(bytes);
-          let r=await jss(t,opt);
-          socket.setHeader("Content-Type",dct);
-          await socket.close(r);
-          //caches[get]={date:Date.now(),content:r,headers:socket.headers()};
+        }else if(/o([a-z])?\.js$/.test(last)){
+          logsole.debug("obfuscating js file before sending");
+          socket.setHeader("Content-Type","text/javascript");
+          const vl=String(last.match(/o([a-z])?\.js$/)?.[0]); // typesafety to mitigate vscode warnings
+          const l=vl.charAt(1);
+          const jsoConfig={
+            d:{"optionsPreset":"default"},//{"compact":true,"controlFlowFlattening":false,"deadCodeInjection":false,"debugProtection":false,"debugProtectionInterval":0,"disableConsoleOutput":false,"identifierNamesGenerator":"hexadecimal","log":false,"numbersToExpressions":false,"renameGlobals":false,"selfDefending":false,"simplify":true,"splitStrings":false,"stringArray":true,"stringArrayCallsTransform":false,"stringArrayCallsTransformThreshold":0.5,"stringArrayEncoding":[],"stringArrayIndexShift":true,"stringArrayRotate":true,"stringArrayShuffle":true,"stringArrayWrappersCount":1,"stringArrayWrappersChainedCalls":true,"stringArrayWrappersParametersMaxCount":2,"stringArrayWrappersType":"variable","stringArrayThreshold":0.75,"unicodeEscapeSequence":false},
+            l:{"optionsPreset":"low-obfuscation"},//{"compact":true,"controlFlowFlattening":false,"deadCodeInjection":false,"debugProtection":false,"debugProtectionInterval":0,"disableConsoleOutput":true,"identifierNamesGenerator":"hexadecimal","log":false,"numbersToExpressions":false,"renameGlobals":false,"selfDefending":true,"simplify":true,"splitStrings":false,"stringArray":true,"stringArrayCallsTransform":false,"stringArrayEncoding":[],"stringArrayIndexShift":true,"stringArrayRotate":true,"stringArrayShuffle":true,"stringArrayWrappersCount":1,"stringArrayWrappersChainedCalls":true,"stringArrayWrappersParametersMaxCount":2,"stringArrayWrappersType":"variable","stringArrayThreshold":0.75,"unicodeEscapeSequence":false},
+            m:{"optionsPreset":"medium-obfuscation"},//{"compact":true,"controlFlowFlattening":true,"controlFlowFlatteningThreshold":0.75,"deadCodeInjection":true,"deadCodeInjectionThreshold":0.4,"debugProtection":false,"debugProtectionInterval":0,"disableConsoleOutput":true,"identifierNamesGenerator":"hexadecimal","log":false,"numbersToExpressions":true,"renameGlobals":false,"selfDefending":true,"simplify":true,"splitStrings":true,"splitStringsChunkLength":10,"stringArray":true,"stringArrayCallsTransform":true,"stringArrayCallsTransformThreshold":0.75,"stringArrayEncoding":["base64"],"stringArrayIndexShift":true,"stringArrayRotate":true,"stringArrayShuffle":true,"stringArrayWrappersCount":2,"stringArrayWrappersChainedCalls":true,"stringArrayWrappersParametersMaxCount":4,"stringArrayWrappersType":"function","stringArrayThreshold":0.75,"transformObjectKeys":true,"unicodeEscapeSequence":false},
+            h:{"optionsPreset":"high-obfuscation"},//{"compact":true,"controlFlowFlattening":true,"controlFlowFlatteningThreshold":1,"deadCodeInjection":true,"deadCodeInjectionThreshold":1,"debugProtection":true,"debugProtectionInterval":4000,"disableConsoleOutput":true,"identifierNamesGenerator":"hexadecimal","log":false,"numbersToExpressions":true,"renameGlobals":false,"selfDefending":true,"simplify":true,"splitStrings":true,"splitStringsChunkLength":5,"stringArray":true,"stringArrayCallsTransform":true,"stringArrayEncoding":["rc4"],"stringArrayIndexShift":true,"stringArrayRotate":true,"stringArrayShuffle":true,"stringArrayWrappersCount":5,"stringArrayWrappersChainedCalls":true,"stringArrayWrappersParametersMaxCount":5,"stringArrayWrappersType":"function","stringArrayThreshold":1,"transformObjectKeys":true,"unicodeEscapeSequence":false},
+
+            e:{"optionsPreset":"high-obfuscation","compact":true,"selfDefending":true,"disableConsoleOutput":true,"debugProtection":true,"debugProtectionInterval":4000,"splitStrings":true,"splitStringsChunkLength":5,"splitStringsChunkLengthEnabled":false,"stringArray":true,"stringArrayRotate":true,"stringArrayRotateEnabled":true,"stringArrayShuffle":true,"stringArrayShuffleEnabled":true,"simplify":true,"stringArrayThreshold":1,"stringArrayThresholdEnabled":true,"stringArrayIndexesType":["hexadecimal-number"],"stringArrayIndexShift":true,"stringArrayCallsTransform":false,"stringArrayCallsTransformThreshold":1,"stringArrayEncoding":["none"],"stringArrayEncodingEnabled":true,"stringArrayWrappersCount":5,"stringArrayWrappersChainedCalls":true,"stringArrayWrappersParametersMaxCount":5,"stringArrayWrappersType":"function","numbersToExpressions":true,"sourceMap":false,"sourceMapMode":"separate","sourceMapBaseUrl":"","sourceMapFileName":"","domainLock":[],"domainLockRedirectUrl":"about:blank","domainLockEnabled":true,"forceTransformStrings":[],"reservedNames":[],"reservedStrings":[],"seed":0,"controlFlowFlatteningThreshold":1,"controlFlowFlattening":true,"deadCodeInjectionThreshold":1,"deadCodeInjection":true,"unicodeEscapeSequence":false,"renameGlobals":true,"renameProperties":true,"renamePropertiesMode":"unsafe","target":"browser-no-eval","identifierNamesGenerator":"hexadecimal","identifiersDictionary":[],"identifiersPrefix":"","transformObjectKeys":true,"ignoreImports":false,"config":"","exclude":[],"identifierNamesCache":null,"inputFileName":"","log":false,"sourceMapSourcesMode":"sources-content"},
+            n:{"compact":false,"controlFlowFlattening":true,"controlFlowFlatteningThreshold":1,"numbersToExpressions":true,"simplify":true,"stringArrayShuffle":true,"splitStrings":true,"stringArrayThreshold":1},
+            c:{"optionsPreset":"high-obfuscation","renameGlobals":true,"renameProperties":false,"renamePropertiesMode":"unsafe","target":"browser-no-eval"},
+          };
+          const c=jsoConfig[l]||jsoConfig.d;
+          const or=jso.obfuscate(fstr,c).getObfuscatedCode();
+
+          logsole.log("obfuscation level",l,vl);
+          logsole.log("obfuscated file length",or.length);
+          await socket.close(or);
         }else if(last.endsWith(".proxy.json")){
           logsole.debug("proxying the connection");
-          let json=JSON.parse(td.decode(bytes));
+          let json=JSON.parse(fstr);
           let headers;
           let method;
           let body;
@@ -377,12 +404,12 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
           await socket.close(rtext);
           //caches[get]={date:Date.now(),content:rtext,headers:socket.headers()};
         }else if(last.endsWith(".link")){
-          logsole.debug("following link to",td.decode(bytes));
-          await handler(td.decode(bytes));
+          logsole.debug("following link to",fstr);
+          await handler(fstr);
         }else if(last.endsWith(".ai.json")){
           logsole.debug("using ai for content");
           let ai=aid[get];
-          const json=JSON.parse(td.decode(bytes));
+          const json=JSON.parse(fstr);
           logsole.debug("ai exist",!!ai);
           if(!ai||ai.done){
             ai=aid[get]={};
@@ -443,6 +470,14 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
             await socket.close(ai?.res?.stack+"");
           };
           //caches[get]={date:Date.now(),content:rc,headers:socket.headers()};
+        }else if(isJss&&dct){
+          logsole.debug("file already parsed as js multiline string");
+          //logsole.debug("parsing as js multiline string");
+          //let t=td.decode(bytes);
+          //let r=await jss(t,opt);
+          socket.setHeader("Content-Type",dct);
+          await socket.close(fstr);
+          //caches[get]={date:Date.now(),content:r,headers:socket.headers()};
         }else if(dct){
           logsole.info("using as static file");
           socket.setHeader("Content-Type",dct);

@@ -54,7 +54,7 @@
 
     //const surl=socket.options.url,userId=surl.match(/=[0-9]*$/)[0].replace(/^=/,"");
 
-    globalThis.dloOOpt={...xploit.oopt};
+    //globalThis.dloOOpt={...xploit.oopt};
     
 
 
@@ -112,6 +112,6 @@
         else return null;
     };
 
-    globalThis.xploit=xploit;
+    if(debug)globalThis.xploit=xploit;
     return debug?xploit:xploit.version;
-})(true);
+})();

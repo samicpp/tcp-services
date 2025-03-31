@@ -88,7 +88,23 @@ export default async function main(socket: Engine.HttpSocket|Engine.PseudoHttpSo
     }else{
         logsole.log("v2.deno.ts client isnt trying to upgrade");
         //await socket.writeText("hello");
-        await socket.close("hello"); 
+        socket.setHeader("Content-Type","text/html;charset=utf8");
+        await socket.close(`<!DOCTYPE html>
+<html>
+    <head>
+        <title>something</title>
+        <script src="/v2/preface.oc.js"></script>
+        <link rel="stylesheet" href="/style.css"/>
+        <link rel="stylesheet" href="/v2/style.css"/>
+    </head>
+    <body>
+        <div class="main">
+            <p>hello world</p>
+            <p></p>
+        </div>
+        ${/*<script src="/v2/load.js"></script>*/''}
+    </body>
+</html>`); 
         //dele();
     }
 }
@@ -97,7 +113,7 @@ export async function init(socket: Engine.HttpSocket|Engine.PseudoHttpSocket, ur
     
     main(socket,url,get,opt);
 
-    //dele();
+    dele();
 }
 
 //export {active};
