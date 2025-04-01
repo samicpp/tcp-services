@@ -1,7 +1,22 @@
 .dark{
     color:aliceblue;
     background-color: #181818;
+    font-family: monospace;
 }
-.red{
-    color:red
+.red{ color:rgb(255, 87, 87); }
+.grey{ color:#c4c4c4; }
+.light-green{ color:#a5ffa5; }
+.bold{ font-weight: bold; }
+var{
+    background-color: #000;
+    /* lighting-color: ; */
+    color:rgb(135, 235, 147);
+}
+copy-js,open-js{
+    color: skyblue;
+    cursor: pointer;
+    text-decoration: underline;
+}
+copy-js:active,open-js:active{
+    color:rgb(254, 68, 68);
 }

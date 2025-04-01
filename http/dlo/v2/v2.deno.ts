@@ -10,6 +10,7 @@ let del:Function;
 let td=new TextDecoder;
 let te=new TextEncoder;
 let closing=false;
+export let store:Record<string,{ws:Engine.WebSocket}>={};
 //let imp;
 //const room:WebSocket[]=[];
 //let active=true;
@@ -76,15 +77,34 @@ export default async function main(socket: Engine.HttpSocket|Engine.PseudoHttpSo
         logsole.log("v2.deno.ts websocket upgrade");
         
 
+        const uid=url.searchParams.get("uid");
         
+        if(uid){
+            let w=await socket.websocket();
+            if(w)logsole.log("v2.deno.ts upgraded connection");
+            else return logsole.log("v2.deno.ts couldnt upgrade");
 
-        let w=await socket.websocket();
-        if(w)logsole.log("v2.deno.ts upgraded connection");
-        else return logsole.log("v2.deno.ts couldnt upgrade");
-
-        w.on("frame",handler.bind(this,w,{closing:false}));
+            logsole.log("v2.deno.ts uid is",uid);
+            w.on("frame",handler.bind(this,w,{closing:false}));
+            store[uid]={ws:w};
+        } else {
+            logsole.log("v2.deno.ts no uid");
+            socket.status=403;
+            await socket.close("no uid");
+        };
+        
     
         //dele();
+    }if(client.data){
+        logsole.log("v2.deno.ts client send data",client.data);
+        try{
+            const json=JSON.parse(client.data);
+            for(const m of json.msg)await store[json.token].ws.sendText(m);
+            logsole.log("v2.deno.ts sent messages");
+        }catch(err){
+            socket.status=400;
+            await socket.close("");
+        }
     }else{
         logsole.log("v2.deno.ts client isnt trying to upgrade");
         //await socket.writeText("hello");
@@ -98,6 +118,7 @@ export default async function main(socket: Engine.HttpSocket|Engine.PseudoHttpSo
         <link rel="stylesheet" href="/v2/style.css"/>
     </head>
     <body>
+        <!--https://dlo.cppdev.dev/hacks-->
         <div class="main">
             <p>hello world</p>
             <p></p>
@@ -111,6 +132,10 @@ export default async function main(socket: Engine.HttpSocket|Engine.PseudoHttpSo
 export async function init(socket: Engine.HttpSocket|Engine.PseudoHttpSocket, url: URL, get: string, opt:Record<string,any>|void, dele: ()=> void, past: any|void, imports:Record<string,any>){
     del=dele;
     
+    if(past){
+        let nstore=(past?.mod?.getStore||(()=>store))();store=nstore;
+        logsole.info("v2.deno.ts trying to use previous store",store);
+    };
     main(socket,url,get,opt);
 
     dele();
@@ -120,3 +145,6 @@ export async function init(socket: Engine.HttpSocket|Engine.PseudoHttpSocket, ur
 export const state:{active:boolean}={
     active:false,
 };
+export function getStore(){
+    return store;
+}
