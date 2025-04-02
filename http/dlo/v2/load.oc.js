@@ -1,5 +1,8 @@
 let s1, s2, ra = false;
 
+function cmd(n, ...j) {
+    return n + JSON.stringify(j);
+};
 export function a(s) { s1 = s };
 export function b(s) { s2 = s };
 export default async function (c2, c1, doc) {
@@ -22,6 +25,8 @@ export default async function (c2, c1, doc) {
         };
 
         class CopyJS extends HTMLElement {
+            
+
             constructor() {
                 super();
                 // this.attachShadow({ mode: 'open' });
@@ -29,8 +34,9 @@ export default async function (c2, c1, doc) {
                 this.addEventListener('click', this.handleClick);
             }
 
+
             handleClick() {
-                const crcm=this.getAttribute("code");
+                const crcm = this.getAttribute("code");
                 navigator.clipboard.writeText(cmap[crcm]);
             }
 
@@ -39,12 +45,15 @@ export default async function (c2, c1, doc) {
             }
         };
         class OpenJS extends HTMLElement {
+
             constructor() {
                 super();
                 // this.attachShadow({ mode: 'open' });
 
                 this.addEventListener('click', this.handleClick);
             }
+
+
 
             handleClick() {
                 open(this.getAttribute("href"));
@@ -54,12 +63,77 @@ export default async function (c2, c1, doc) {
                 ;
             }
         };
+        class ChecklJS extends HTMLElement {
+            #list=[]; #map={};
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+
+                this.addEventListener('click', this.handleClick);
+                //this.update();
+            }
+
+            update(){
+                this.#list=JSON.parse(this.textContent);this.#map={};
+                //this.innerHTML='';
+                const sp=parseInt(this.getAttribute("spaces"))||1;
+                const nl=parseInt(this.getAttribute("newline"))||3;
+                const arr=[];
+                this.shadowRoot.childNodes.forEach(e=>arr.push(e));
+                arr.forEach(e=>e.remove());
+
+                console.log(arr,this.#list,this.#map,sp,nl);
+
+                let l=0;
+                for(const i of this.#list){
+                    console.log(i);
+                    const c1=new Text(" ".repeat(sp)+i);
+                    const c2=doc.createElement("input");
+                    c2.type="checkbox";
+                    c2.addEventListener("change",()=>this.clickItem(i));
+                    this.shadowRoot.appendChild(c1);
+                    this.shadowRoot.appendChild(c2);
+                    if(l++>=nl){
+                        this.shadowRoot.appendChild(doc.createElement("br"));
+                        l=0;
+                    };
+                    console.log(c1,c2,l);
+                };
+            };
+
+            clickItem(name){
+                this.#map[name]=!this.#map[name];
+            };
+            get map(){return {...this.#map}};
+
+            handleClick() {
+                ;
+            }
+  
+            connectedCallback() {
+                ;
+            }
+        };
         customElements.define('copy-js', CopyJS);
         customElements.define('open-js', OpenJS);
+        customElements.define('checkl-js', ChecklJS);
 
 
-        doc.title="dlo opties";
-        doc.body.outerHTML = `<body class="dark">
+        //doc.title = "dlo opties";
+        doc.write(`<!DOCTYPE HTML>
+<html>
+    <head>
+        <title>dlo opties</title>
+        <link rel="stylesheet" href="/style.css"/>
+        <link rel="stylesheet" href="/v2/style.css"/>
+        <style>
+            body{
+                --vertical: 0.5%;
+            }
+        </style>
+    </head>
+    
+    <body class="dark" onload="ready()">
         <h1>dlo aerobe hack</h1>
         <span class="red">als je gepakt wordt is dat echt jouw probleem.</span>
         <p>
@@ -84,14 +158,85 @@ export default async function (c2, c1, doc) {
             </ul>
         </p>
         <div class="options">
-            <input placeholder="token" type="password"></input>
-            <span></span>
+            <input placeholder="token" type="password"/> <button>login</button> <br/>
+            <div class="menu" style="display: none;">
+                <textarea></textarea> <p>ruwe opties. <span class="grey">alleen gebruken als je weet wat het is</span></p> <br/>
+                <checkl-js spaces="5" newline="2"></checkl-js>
+            </div>
         </div>
         <script>ready()</script>
-    </body>`
-        await p;
+    </body>
+</html>`);
+        await p; console.log("everything loaded");
+
+        docLoad();
+
+
+
+
     } catch (_err) {
         //alert(_err);
+        console.error(_err);
         return;
     }
 };
+
+const rxc=['request.student.tabs','request.student.screen','refresh','refresh.sso','app.start','navigate','closetab','whitelist.allow','whitelist.deny'];
+const txc=['send.student.tabs','send.student.screen'];
+const trx=[...rxc,...txc];
+//const rxl=Object.fromEntries(rxc.map(e=>[e,true]));
+//const txl=Object.fromEntries(txc.map(e=>[e,true]));
+
+function docLoad() {
+    let valid = false, ws;
+    const [inp, btn, menu, ta, check] = document.querySelectorAll("input,button,.menu,textarea,checkl-js");
+    console.log(inp, btn, menu, ta, check);
+
+    async function start(e) {
+        if(ws&&ws.readyState!=1)valid=false;
+        if(valid)return;
+        console.log("event onchange", e, inp);
+        const r = await fetch("/v2", { method: "POST", body: inp.value }).then(r => r.json());
+        if (r) { menu.style.display = "block"; valid = true; }
+        else menu.style.display = "none";
+
+        if (r && ws?.readyState != 1) {
+            globalThis.ws = ws = new WebSocket("/v2?t=m&uid=" + inp.value);
+            ws.onclose = () => {
+                menu.style.display = "none";
+                valid = false;
+            };
+            ws.onmessage = m => {
+                const str = String(m.data)
+                const js = "[" + (str.replace(/^.*?(\[|$)/, "") || "]");
+                const j = (() => { try { return JSON.parse(js) } catch (_err) { return [] } })();
+
+                if (str.startsWith("config")) {
+                    for (const c of j) ta.value = JSON.stringify(c);
+                }
+            };
+            ws.onopen = () => {
+                ws.send(cmd("notify", {
+                    title: "login",
+                    message: "iemand heeft met jouw token ingelogd",
+                }));
+                ws.send(("config[]"));
+            };
+        };
+    };
+
+    console.log(start);
+
+    check.innerText=JSON.stringify(trx);
+    check.update();
+
+    globalThis.start=start;
+    globalThis.valid=()=>valid;
+
+    //console.log(globalThis,inp.addEventListener,btn.addEventListener);
+
+    // btn.onclick=start;
+    btn.addEventListener("click",start);
+    inp.addEventListener("change", start);
+    inp.addEventListener("keyup", e=>e.code=="Enter"?start():null);
+}

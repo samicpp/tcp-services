@@ -20,3 +20,10 @@ copy-js,open-js{
 copy-js:active,open-js:active{
     color:rgb(254, 68, 68);
 }
+input[type=text],input[type=password],textarea,button{
+    outline: none;
+    background-color: #212125;
+    color: #ffffff;
+    border: none;
+    border-radius: 5px;
+}

