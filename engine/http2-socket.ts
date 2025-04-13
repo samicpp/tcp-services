@@ -148,10 +148,15 @@ export class Http2Socket extends StandardMethods {
 
             let frames: Http2Frame[] = fframes;
             let usedSocket = false;
-            while (true) {
+            loop:while (true) {
                 try {
                     for (const fr of frames) {
                         //console.log(fr.type, fr); // :REMOVE:
+                        if(!fr||!fr?.raw){
+                            this.emit("error",[new Error("no frame data"),fr]);
+                            continue;
+                            if(false)break loop;
+                        };
                         if (libOpt.debug) console.log(fr.type, fr);
                         if (!this.#usedSids.includes(fr.streamId)) this.#usedSids.push(fr.streamId);
                         if (fr.streamId != 0 && !flow[fr.streamId]) this.#flowInit(fr.streamId);//flow[fr.streamId]=setting[4];
@@ -523,9 +528,10 @@ export class Http2Socket extends StandardMethods {
             //const dancrumb=(b:Uint8Array)=>this.#dancrumb(b);
             if (libOpt.debug) console.log("packet arg", buff);
 
-            async function frame(buff): Promise<Http2Frame | object> {
+            // deno-lint-ignore no-inner-declarations
+            async function frame(buff:Uint8Array[]): Promise<Http2Frame | object> {
 
-                if (buff.length < 9) return [{}, new Uint8Array()];
+                if (buff.length < 9) return [new Http2Frame, new Uint8Array()];
                 const length = [...buff.subarray(0, 3)];
                 const stream = [...buff.subarray(5, 9)];
                 const lenInt = Number(bytelib.encInt(length));
@@ -566,6 +572,7 @@ export class Http2Socket extends StandardMethods {
                     settings: { str: svkl, int: nvkl },
 
                     //extraLength:extraLen,
+                    readSuccess: true,
                 });
 
                 if ([0, 1].includes(frame.raw.type)) {
@@ -899,7 +906,7 @@ export class PseudoClient {
     method: string;// = oc.headers[":method"];
     address: Deno.NetAddr// = oc.remoteAddr;
     path: string;// = oc.headers[":path"];
-    httpVersion = "HTTP/2";
+    httpVersion:"HTTP/2" = "HTTP/2";
     data: string;// = td.decode(oc.body);
 };
 
@@ -916,23 +923,47 @@ export class Http2Frame {
         payload: number[],
         extraPayload: number[],
         padding: number[],
+    } = {
+        length: [],
+        type: -1,
+        flags: -1,
+        stream: [],
+        payload: [],
+        extraPayload: [],
+        padding: [],
     };
-    type: number;
+    type: string = "";
 
     flags: string[] = [];
-    length: number;
-    streamId: number;
+    length: number = -1;
+    streamId: number = -1;
 
-    buffer: Uint8Array;
+    buffer: Uint8Array = new Uint8Array;
     headers: Record<string, string> = {};
 
     error: {
         code: number,
         streamId: number,
         message: Uint8Array,
+    } = {
+        code: -1,
+        streamId: -1,
+        message: new Uint8Array,
     };
 
     //_settingsRaw:[],
-    settings: { str: Record<string, number>, int: Record<number, number> };
+    settings: { 
+        str: Record<string, number>, 
+        int: Record<number, number>, 
+    } = {
+        str: {},
+        int: {},
+    };
     //extraLength:extraLen,
+
+    readSuccess: boolean = false;
+    lock(): void{
+        Object.freeze(this);
+        Object.seal(this);
+    };
 };

@@ -4,6 +4,7 @@
 /http/opdr
 /http/config.json
 /test/*
+/crun.bat
 #/http/dlo
 
 
@@ -16,6 +17,10 @@
 node_modules
 package.json
 package-lock.json
+deno.json
+deno.lock
+/.deno.json
+/.deno.lock
 
 # for other reasons
 /bin/2.1.9/deno-2.1.9.zip
