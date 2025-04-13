@@ -1,12 +1,11 @@
-import Engine from "./engine.ts";
-import "./docs.d.ts";
+import Engine from "./engine/mod.ts";
+const engine=Engine;
 
-const engine: Engine=new Engine();
-engine.port=80;
-engine.host="0.0.0.0";
-engine.upgrade=true;
-engine.on("connect",async function({socket,client}: HttpSocket): Promise<void>{
+
+engine.on("connect",async function({socket,client}: Engine.HttpSocket): Promise<void>{
     console.log(client);
+
+    if(!client)return;
 
     if(!client.isValid){
         socket.status=400;
@@ -31,11 +30,11 @@ engine.on("connect",async function({socket,client}: HttpSocket): Promise<void>{
     }
 });
 engine.on("http2",h2cHandler);
-async function h2cHandler(h2c:Http2Socket){
+async function h2cHandler(h2c:Engine.Http2Socket){
     let r=await h2c.ready;
     console.log("h2c",r);
     h2c.on("error",console.error);
-    h2c.on("stream",async function(stream:Http2Stream){
+    h2c.on("stream",async function(stream:Engine.Http2Stream){
         console.log(stream);
 
         //stream.status=200;
@@ -45,7 +44,7 @@ async function h2cHandler(h2c:Http2Socket){
     h2c.on("close",c=>console.warn(c));
 }
 engine.on("error",console.error);
-engine.start();
+engine.start(8080);
 console.log("listening");
 
 globalThis.engine=engine;
