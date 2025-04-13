@@ -4,4 +4,4 @@ export * as EngineLib from "./mixer.ts";
 
 // declerations
 
-export * from "./library.d.ts";
+//export * from "./library.d.ts";

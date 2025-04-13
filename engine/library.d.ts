@@ -529,6 +529,10 @@ declare namespace Engine {
         readonly settings:{readonly str:Record<string,number>,readonly int:Record<number,number>},
     
         /**
+         * Indicitates whether the Http2Frame contains data or just default values
+         */
+        readonly readSuccess: boolean;
+        /**
          * 
          */
         //readonly extraLength:number;

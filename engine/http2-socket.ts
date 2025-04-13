@@ -1,7 +1,7 @@
 import "./lib.deno.d.ts";
 import "./lib.engine.d.ts";
 import { Eventable as StandardMethods } from "./standard.ts";
-import { libOpt } from "./debug.ts";
+import { libOpt, store } from "./debug.ts";
 import { ByteLib } from "./buffer.ts";
 
 import * as compress from "jsr:@deno-library/compress";
@@ -152,56 +152,58 @@ export class Http2Socket extends StandardMethods {
                 try {
                     for (const fr of frames) {
                         //console.log(fr.type, fr); // :REMOVE:
-                        if(!fr||!fr?.raw){
-                            this.emit("error",[new Error("no frame data"),fr]);
-                            continue;
-                            if(false)break loop;
-                        };
-                        if (libOpt.debug) console.log(fr.type, fr);
-                        if (!this.#usedSids.includes(fr.streamId)) this.#usedSids.push(fr.streamId);
-                        if (fr.streamId != 0 && !flow[fr.streamId]) this.#flowInit(fr.streamId);//flow[fr.streamId]=setting[4];
-                        if (fr.raw.type == 4 && fr.raw.flags == 0) {
-                            //settings.push(fr);
-                            if (fr.streamId == 0) for (let si in fr.settings.int) this.#setting[si] = fr.settings.int[si];
-                            else for (let si in fr.settings.int) {
-                                if (!settings[fr.streamId]) settings[fr.streamId] = { ...setting, ...fr.settings.int };
-                                else for (let si in fr.settings.int) settings[fr.streamId][si] = fr.settings.int[si];
+                        store("http2frame",fr); // :DEBUG:
+                        if(fr.readSuccess){
+                            if (libOpt.debug) console.log(fr.type, fr);
+                            if (!this.#usedSids.includes(fr.streamId)) this.#usedSids.push(fr.streamId);
+                            if (fr.streamId != 0 && !flow[fr.streamId]) this.#flowInit(fr.streamId);//flow[fr.streamId]=setting[4];
+                            if (fr.raw.type == 4 && fr.raw.flags == 0) {
+                                //settings.push(fr);
+                                if (fr.streamId == 0) for (let si in fr.settings.int) this.#setting[si] = fr.settings.int[si];
+                                else for (let si in fr.settings.int) {
+                                    if (!settings[fr.streamId]) settings[fr.streamId] = { ...setting, ...fr.settings.int };
+                                    else for (let si in fr.settings.int) settings[fr.streamId][si] = fr.settings.int[si];
+                                };
+                                if (fr.settings.int[4]) flow[fr.streamId] = fr.settings.int[4];
+                                const nf = await this.#frame(fr.streamId, 4, { flags: ["ack"] });
+                                //console.log("setting acknowledgement",nf); // :REMOVE:
+                                let r = await this.#tcp.write(nf.buffer).catch(e => e);
+                                //console.log("write result",r); // :REMOVE:
+                            } else if (fr.raw.type == 8) {
+                                let wu = fr.buffer;
+                                //if(!flow[fr.streamId])flow[fr.streamId]=flow[0];
+                                let awu = [...wu];
+                                this.#flow[fr.streamId] += parseInt(awu.map(v => ("00" + v.toString(16)).substring(v.toString(16).length)).join(''), 16);
+                            } else if (fr.raw.type == 1) {
+                                if (!headersBuff[fr.streamId]) headersBuff[fr.streamId] = [];
+                                if (!headers[fr.streamId]) headers[fr.streamId] = {};
+                                headers[fr.streamId] = { ...headers[fr.streamId], ...fr.headers };
+                                headersBuff[fr.streamId].push(...fr.raw.payload);
+
+                                if (fr.flags.includes("end_stream")) {
+                                    this.#respond(fr.streamId, headers, bodies, headersBuff);
+                                }
+                            } else if (fr.raw.type == 0) {
+                                if (!bodies[fr.streamId]) bodies[fr.streamId] = [];
+                                bodies[fr.streamId].push(...fr.buffer);
+
+                                if (fr.flags.includes("end_stream")) {
+                                    this.#respond(fr.streamId, headers, bodies, headersBuff);
+                                }
+                            } else if (fr.raw.type == 7) {
+                                await this.#tcp.write((await this.#frame(fr.streamId, 7, { flags: ["ack"] })).buffer).catch(e => e);
+                                this.emit("close", fr);
+                                this.#tcp.close();
+                            } else if (fr.raw.type == 3) {
+                                flow[fr.streamId] = flow[0];
+                                this.#usedSids.splice(this.#usedSids.indexOf(fr.streamId), 1);
+                            } else if (fr.raw.type == 6) {
+                                await this.#tcp.write((await this.#frame(fr.streamId, 6, { flags: ["ack"], data: fr.buffer })).buffer).catch(e => e);
                             };
-                            if (fr.settings.int[4]) flow[fr.streamId] = fr.settings.int[4];
-                            const nf = await this.#frame(fr.streamId, 4, { flags: ["ack"] });
-                            //console.log("setting acknowledgement",nf); // :REMOVE:
-                            let r = await this.#tcp.write(nf.buffer).catch(e => e);
-                            //console.log("write result",r); // :REMOVE:
-                        } else if (fr.raw.type == 8) {
-                            let wu = fr.buffer;
-                            //if(!flow[fr.streamId])flow[fr.streamId]=flow[0];
-                            let awu = [...wu];
-                            this.#flow[fr.streamId] += parseInt(awu.map(v => ("00" + v.toString(16)).substring(v.toString(16).length)).join(''), 16);
-                        } else if (fr.raw.type == 1) {
-                            if (!headersBuff[fr.streamId]) headersBuff[fr.streamId] = [];
-                            if (!headers[fr.streamId]) headers[fr.streamId] = {};
-                            headers[fr.streamId] = { ...headers[fr.streamId], ...fr.headers };
-                            headersBuff[fr.streamId].push(...fr.raw.payload);
-
-                            if (fr.flags.includes("end_stream")) {
-                                this.#respond(fr.streamId, headers, bodies, headersBuff);
-                            }
-                        } else if (fr.raw.type == 0) {
-                            if (!bodies[fr.streamId]) bodies[fr.streamId] = [];
-                            bodies[fr.streamId].push(...fr.buffer);
-
-                            if (fr.flags.includes("end_stream")) {
-                                this.#respond(fr.streamId, headers, bodies, headersBuff);
-                            }
-                        } else if (fr.raw.type == 7) {
-                            await this.#tcp.write((await this.#frame(fr.streamId, 7, { flags: ["ack"] })).buffer).catch(e => e);
-                            this.emit("close", fr);
-                            this.#tcp.close();
-                        } else if (fr.raw.type == 3) {
-                            flow[fr.streamId] = flow[0];
-                            this.#usedSids.splice(this.#usedSids.indexOf(fr.streamId), 1);
-                        } else if (fr.raw.type == 6) {
-                            await this.#tcp.write((await this.#frame(fr.streamId, 6, { flags: ["ack"], data: fr.buffer })).buffer).catch(e => e);
+                        }else/*(!fr.readSuccess)*/{
+                            this.emit("error",[new Error("frame read unsuccessfull"),fr]);
+                            //continue;
+                            if(false)break loop;
                         };
                     };
 
