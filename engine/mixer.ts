@@ -8,11 +8,11 @@
 
 export * from "./engine.ts";
 //export * as Engine from "./engine.ts";
-//export { libOpt, setOpt } from "./debug.ts";
+export { libOpt, setOpt } from "./debug.ts";
 export * from "./http2-socket.ts";
 export * from "./http-socket.ts";
 export * from "./websocket.ts";
 export * from "./standard.ts";
-export * from "./debug.ts";
+export * from "./version.ts";
 
 // */
