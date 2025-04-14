@@ -13,5 +13,6 @@ export * from "./http2-socket.ts";
 export * from "./http-socket.ts";
 export * from "./websocket.ts";
 export * from "./standard.ts";
+export * from "./version.ts";
 
 // */
