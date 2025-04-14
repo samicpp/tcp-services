@@ -320,9 +320,10 @@ export async function listener({socket,client}: HttpSocket|PseudoHttpSocket){
           } else {
             let mod=await import(get+"?d="+Date.now()); //anti chacheing
             //await new Promise(r=>r(mod.default(socket,url,get)));
+            let p=dyn[get];
             dyn[get]={mod,state:{...mod.state}};
             dyn[get].state.active=true;
-            new Promise(r=>r(mod.init(socket,url,get,opt,()=>{dyn[get].state.active=false},dyn[get],imports))).catch(e=>{logsole.error(e);dyn[get].state.active=false});
+            new Promise(r=>r(mod.init(socket,url,get,opt,()=>{dyn[get].state.active=false},p,imports))).catch(e=>{logsole.error(e);dyn[get].state.active=false});
           };
           //if(dyn[get].state?.allowCaching)
         }else if(last.endsWith(".async.js")){
