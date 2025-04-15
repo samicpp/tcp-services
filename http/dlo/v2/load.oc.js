@@ -158,10 +158,11 @@ export default async function (c2, c1, doc) {
             </ul>
         </p>
         <div class="options">
-            <input placeholder="token" type="password"/> <button>login</button> <br/>
+            <input placeholder="token" type="password"/> <button style="display: none;">login</button> <br/>
             <div class="menu" style="display: none;">
                 <textarea></textarea> <p>ruwe opties. <span class="grey">alleen gebruken als je weet wat het is</span></p> <br/>
-                <checkl-js spaces="5" newline="2"></checkl-js>
+                <checkl-js spaces="5" newline="2"></checkl-js> <br/> <br/>
+                <button>opslaan</button>
             </div>
         </div>
         <script>ready()</script>
@@ -189,7 +190,7 @@ const trx=[...rxc,...txc];
 
 function docLoad() {
     let valid = false, ws;
-    const [inp, btn, menu, ta, check] = document.querySelectorAll("input,button,.menu,textarea,checkl-js");
+    const [inp, btn, menu, ta, check, btn2] = document.querySelectorAll("input,button,.menu,textarea,checkl-js,button"); // button 2x cause of readability
     console.log(inp, btn, menu, ta, check);
 
     async function start(e) {
@@ -236,7 +237,11 @@ function docLoad() {
     //console.log(globalThis,inp.addEventListener,btn.addEventListener);
 
     // btn.onclick=start;
-    btn.addEventListener("click",start);
+    //btn.addEventListener("click",start);
     inp.addEventListener("change", start);
-    inp.addEventListener("keyup", e=>e.code=="Enter"?start():null);
+    //inp.addEventListener("keyup", e=>e.code=="Enter"?start():null);
+
+    btn2.addEventListener("click",click=>{
+        ;
+    });
 }
