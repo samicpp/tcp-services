@@ -174,6 +174,10 @@ export class Uint {
 
     #buff = new Uint8Array; #length = 0; #bytes = 0;
     get buffer() { return this.#buff };
+
+    #set(nbuff:Uint8Array){
+        for(let i in this.#buff)this.#buff[i]=nbuff[i];
+    };
     //buff=new Array();
     constructor(length = 8) {
         this.#length = length;
