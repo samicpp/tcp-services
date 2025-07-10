@@ -1,0 +1,4 @@
+[submodule "sort-visualizer"]
+	path = http/sorting-algorithms
+	url = https://github.com/samicpp/sort-visualizer.git
+
