@@ -1,9 +1,9 @@
 export const version = {
   buffer: {
     major: 1,
-    middle: 0,
+    middle: 1,
     minor: 0,
-    code: 1,
+    code: 2,
     name() {
       return `${this.major}.${this.middle}.${this.minor}`;
     },

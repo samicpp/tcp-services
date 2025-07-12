@@ -112,7 +112,8 @@ export class ByteLib {
     };
     encInt(buff: number[] | Uint8Array): bigint {
         let r = 0n;
-        [...buff].toReversed().forEach((e, i) => r += BigInt(e) * 0x100n ** BigInt(i));
+        //[...buff].reverse().forEach((e, i) => r += BigInt(e) * 0x100n ** BigInt(i));
+        buff.forEach((e, i) => r += BigInt(e) * 0x100n ** BigInt(buff.length - 1 - i));
         return r;
     };
 
@@ -157,6 +158,194 @@ export class ByteLib {
 
     strToInt(str: string): bigint { return this.encInt(this.sEnc(str)); };
     intToStr(int: bigint | number) { return this.sDec(this.decInt(int)); };
+}
+
+
+export class Uint {
+    #tx = new ByteLib;
+    static bytes = new ByteLib().bytes;
+
+    static from(int = 0, length = this.bytes(int) * 8) {
+        const u = new this(length);
+        u.add(int);
+        return u;
+    };
+
+
+    #buff = new Uint8Array; #length = 0; #bytes = 0;
+    get buffer() { return this.#buff };
+
+    #set(nbuff:Uint8Array){
+        for(let i in this.#buff)this.#buff[i]=nbuff[i];
+    };
+    //buff=new Array();
+    constructor(length = 8) {
+        this.#length = length;
+        const n = length / 8;
+        this.#bytes = Math.floor(n) == n ? n : Math.floor(n + 1);
+        this.#buff = new Uint8Array(this.#bytes);
+    };
+
+
+    add(n: number | bigint = 0): Uint {
+        let num = typeof n == "bigint" ? n : BigInt(parseInt(n));
+        if (num < 0) return this.add(num * -1n);
+        let ar = this.#tx.decInt(num);
+        let over = 0;
+        let lpos = 0;
+        //console.log(`ar = [${ar}]`);
+        ar.reverse().forEach((e, i) => {
+            let rpos = this.#buff.length - 1 - i;
+            let n = this.#buff[rpos] + e + over;
+            over = n >>> 8;
+            this.#buff[rpos] = 0xff & n;
+            lpos = rpos;
+            //console.log(`// vars\ne = ${e}\ni = ${i}\nn = ${n}\nover = ${over}\nbuffer[${rpos}] = ${0xff&n}`);
+        });
+        while (over > 0 && lpos > 0) {
+            lpos--;
+            let n = this.#buff[lpos] + over;
+            this.#buff[lpos] = 0xff & n;
+            over = n >>> 8;
+            //console.log(`// vars2\nn = ${n}\nover = ${over}\nbuffer[${lpos}] = ${0xff&n}`);
+        };
+        return this;
+    };
+    sub(n: number | bigint = 0): Uint {
+        let num = typeof n == "bigint" ? n : BigInt(parseInt(n));
+        if (num < 0) return this.add(num * -1n);
+        let ar = this.#tx.decInt(num);
+        let over = 0;
+        let lpos = 0;
+        //console.log(`ar = [${ar}]`);
+
+        ar.reverse().forEach((e, i) => {
+            let rpos = this.#buff.length - 1 - i;
+            let diff = this.#buff[rpos] - e - over;
+            if (diff < 0) {
+                diff += 256;
+                over = 1;
+            } else {
+                over = 0;
+            }
+            this.#buff[rpos] = diff;
+            lpos = rpos;
+        });
+
+        while (over > 0 && lpos > 0) {
+            lpos--;
+            let diff = this.#buff[lpos] - over;
+            if (diff < 0) {
+                diff += 256;
+                over = 1;
+            } else {
+                over = 0;
+            }
+            this.#buff[lpos] = diff;
+        }
+
+
+        /*ar.reverse().forEach((e,i) => {
+            let rpos=this.#buff.length-1-i;
+            let n=this.#buff[rpos]-e-over;
+            over=n>>>8;
+            this.#buff[rpos]=0xff&n;
+            lpos=rpos;
+            //console.log(`// vars\ne = ${e}\ni = ${i}\nn = ${n}\nover = ${over}\nbuffer[${rpos}] = ${0xff&n}`);
+        });
+        while(over>0&&lpos>0){
+            lpos--;
+            let n=this.#buff[lpos]-over;
+            this.#buff[lpos]=0xff&n;
+            over=n>>>8;
+            //console.log(`// vars2\nn = ${n}\nover = ${over}\nbuffer[${lpos}] = ${0xff&n}`);
+        };*/
+        //this.#buff[this.#buff.length-ar.length]=over;
+        return this;
+    };
+    /*mult(n = 1): Uint {
+        let num = n;//Math.floor(n);
+        let over = 0;
+        [...this.#buff].reverse().forEach((e, i) => {
+            let n = Math.floor(this.#buff[i] / num + over);
+            over = n >>> 8;
+            this.#buff[i] = 0xff & n;
+        });
+        return this;
+    };
+    div(n = 1): Uint {
+        let num = n;
+        let over = 0;
+        [...this.#buff].reverse().forEach((e, i) => {
+            let n = Math.floor(this.#buff[i] / num + over);
+            over = n >>> 8;
+            this.#buff[i] = 0xff & n;
+        });
+        return this;
+    };
+    pow(n = 2): Uint {
+        let num = n;
+        let over = 0;
+        [...this.#buff].reverse().forEach((e, i) => {
+            let n = Math.floor(this.#buff[i] ** num + over);
+            over = n >>> 8;
+            this.#buff[i] = 0xff & n;
+        });
+        return this;
+    };
+    root(n = 2): Uint {
+        let num = n;
+        let over = 0;
+        [...this.#buff].reverse().forEach((e, i) => {
+            let n = Math.floor(this.#buff[i] ** (num ** -1) + over);
+            over = n >>> 8;
+            this.#buff[i] = 0xff & n;
+        });
+        return this;
+    };//*/
+
+    mult(n = 1): Uint{
+        let e = this.toBigInt() * BigInt(parseInt(n));
+        this.#buff=new Uint8Array(this.#tx.cap(this.#tx.decInt(e),this.#bytes));
+        return this;
+    };
+    div(n = 1): Uint{
+        let e = this.toBigInt() / BigInt(parseInt(n));
+        this.#buff=new Uint8Array(this.#tx.cap(this.#tx.decInt(e),this.#bytes));
+        return this;
+    };
+    pow(n = 2): Uint{
+        let e = this.toBigInt() ** BigInt(parseInt(n));
+        this.#buff=new Uint8Array(this.#tx.cap(this.#tx.decInt(e),this.#bytes));
+        return this;
+    };
+    root(n = 2): Uint{
+        let e = this.toNumber() ** (parseInt(n) ** -1);
+        this.#buff=new Uint8Array(this.#tx.cap(this.#tx.decInt(e),this.#bytes));
+        return this;
+    };
+
+
+    toBigInt(): bigint {
+        /*let uint = 0n;
+        this.#buff.forEach((u, i) => {
+            uint += BigInt(u) ** BigInt((this.#buff.length - i));
+        });
+        return uint;*/
+        return this.#tx.encInt(this.#buff);
+    };
+    toNumber(): number {
+        //const a=[...this.#buff];
+        /*let uint = 0;
+        this.#buff.forEach((u, i) => {
+            uint += u ** ((this.#buff.length - i));
+        });
+        return uint;*/
+        return Number(this.toBigInt());
+    };
+    toString(radix = 10) {
+        return this.toNumber().toString(radix);
+    };
 }
 
 
@@ -239,6 +428,8 @@ export class Memory {
         return this.#td.decode(this.toUint8Array());
     }
 }
+
+
 
 /*export class Radix{
     static arrShift(arr:number[],radix:number):string[]{
