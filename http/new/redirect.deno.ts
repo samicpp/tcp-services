@@ -7,7 +7,7 @@ let te=new TextEncoder;
 const [_logfile,logsole]=lsSetup();
 
 export default async function main(socket: Engine.HttpSocket|Engine.PseudoHttpSocket, url: URL, get: string, opt:Record<string,any>|void){
-    const nu=`https://www.cppdev.dev/${socket.client?.path||""}`;
+    const nu=`https://www.cppdev.dev${socket.client?.path||""}`;
     logsole.log("redirect.deno.ts redirect to new domain")
     socket.setHeader("Location",nu);
     socket.status=301;

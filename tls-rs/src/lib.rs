@@ -57,7 +57,7 @@ pub fn init() -> Extension {
 }
 // */
 
-use std::ffi::CStr;
+// use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use std::os::windows::io::{FromRawSocket, AsRawSocket};
 use std::sync::Arc;
