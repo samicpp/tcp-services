@@ -1,4 +1,8 @@
-[submodule "sort-visualizer"]
-	path = http/sorting-algorithms
+[submodule "http/sort-visualizer"]
+	path = http/sort-visualizer
 	url = https://github.com/samicpp/sort-visualizer.git
+
+[submodule "engine"]
+	path = engine
+	url = https://github.com/samicpp/deno-http.git
 

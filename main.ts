@@ -158,6 +158,8 @@ if (ports[0] === "") ports = [];
 if (sports[0] === "") sports = [];
 if (dports[0] === "") dports = [];
 
+// ports = ["8080"];
+
 logsole.allow = !silent;
 
 logsole.log(ports, sports, dports, silent);
